@@ -6,6 +6,7 @@ import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { Layout } from "./components/layout/Layout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
+import { Customers } from "./pages/Customers";
 
 // Create query client
 const queryClient = new QueryClient({
@@ -33,10 +34,8 @@ function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
 
                 {/* Placeholder routes - we'll build these next */}
-                <Route
-                  path="/customers"
-                  element={<ComingSoon page="Customers" />}
-                />
+                <Route path="/customers" element={<Customers />} />
+
                 <Route path="/bills" element={<ComingSoon page="Bills" />} />
                 <Route
                   path="/payments"
