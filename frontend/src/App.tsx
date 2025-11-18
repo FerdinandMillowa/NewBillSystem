@@ -9,6 +9,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Customers } from "./pages/Customers";
 import { Bills } from "./pages/Bills";
 import { Payments } from "./pages/Payments";
+import { Reports } from "./pages/Reports";
 
 // Create query client
 const queryClient = new QueryClient({
@@ -40,10 +41,7 @@ function App() {
 
                 <Route path="/bills" element={<Bills />} />
                 <Route path="/payments" element={<Payments />} />
-                <Route
-                  path="/reports"
-                  element={<ComingSoon page="Reports" />}
-                />
+                <Route path="/reports" element={<Reports />} />
                 <Route
                   path="/settings"
                   element={<ComingSoon page="Settings" />}

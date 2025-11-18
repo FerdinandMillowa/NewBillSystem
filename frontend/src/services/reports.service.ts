@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import api from './api';
 
 export const reportsService = {
@@ -33,6 +35,15 @@ export const reportsService = {
 
   getTopCustomers: async (limit?: number) => {
     const { data } = await api.get('/reports/top-customers', { params: { limit } });
+    return data;
+  },
+
+  // New method for export functionality
+  exportReport: async (type: 'csv' | 'pdf', params?: any) => {
+    const { data } = await api.get(`/reports/export/${type}`, { 
+      params,
+      responseType: 'blob'
+    });
     return data;
   },
 };
