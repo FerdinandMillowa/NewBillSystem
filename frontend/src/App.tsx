@@ -7,6 +7,8 @@ import { Layout } from "./components/layout/Layout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { Customers } from "./pages/Customers";
+import { Bills } from "./pages/Bills";
+import { Payments } from "./pages/Payments";
 
 // Create query client
 const queryClient = new QueryClient({
@@ -36,11 +38,8 @@ function App() {
                 {/* Placeholder routes - we'll build these next */}
                 <Route path="/customers" element={<Customers />} />
 
-                <Route path="/bills" element={<ComingSoon page="Bills" />} />
-                <Route
-                  path="/payments"
-                  element={<ComingSoon page="Payments" />}
-                />
+                <Route path="/bills" element={<Bills />} />
+                <Route path="/payments" element={<Payments />} />
                 <Route
                   path="/reports"
                   element={<ComingSoon page="Reports" />}
