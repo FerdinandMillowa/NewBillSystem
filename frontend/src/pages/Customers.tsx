@@ -27,16 +27,40 @@ export const Customers = () => {
     limit: 10,
   });
 
+  // Clean filters helper - removes empty strings
+  const cleanFilters = (filters: any) => {
+    const cleaned: any = {};
+    Object.keys(filters).forEach((key) => {
+      if (
+        filters[key] !== "" &&
+        filters[key] !== null &&
+        filters[key] !== undefined
+      ) {
+        cleaned[key] = filters[key];
+      }
+    });
+    return cleaned;
+  };
+
   // Fetch customers
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["customers", filters],
-    queryFn: () => customersService.getAll(filters),
+    queryFn: () => customersService.getAll(cleanFilters(filters)),
+    retry: (failureCount, error: any) => {
+      // Don't retry on 403 Forbidden
+      if (error?.response?.status === 403) return false;
+      return failureCount < 2;
+    },
   });
 
   // Fetch stats
   const { data: stats } = useQuery({
     queryKey: ["customer-stats"],
     queryFn: () => customersService.getStats(),
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 403) return false;
+      return failureCount < 2;
+    },
   });
 
   // Approve customer mutation
@@ -54,8 +78,12 @@ export const Customers = () => {
       queryClient.invalidateQueries({ queryKey: ["pending-customers"] });
       toast.success("Customer status updated!");
     },
-    onError: () => {
-      toast.error("Failed to update customer status");
+    onError: (error: any) => {
+      if (error?.response?.status === 403) {
+        toast.error("You don't have permission to approve customers");
+      } else {
+        toast.error("Failed to update customer status");
+      }
     },
   });
 
@@ -67,17 +95,29 @@ export const Customers = () => {
       queryClient.invalidateQueries({ queryKey: ["customer-stats"] });
       toast.success("Customer deleted successfully!");
     },
-    onError: () => {
-      toast.error("Failed to delete customer");
+    onError: (error: any) => {
+      if (error?.response?.status === 403) {
+        toast.error("You don't have permission to delete customers");
+      } else {
+        toast.error("Failed to delete customer");
+      }
     },
   });
 
   const handleApprove = (customer: Customer) => {
+    if (!isAdmin) {
+      toast.error("Only administrators can approve customers");
+      return;
+    }
     const newStatus = customer.status === "pending" ? "approved" : "pending";
     approveMutation.mutate({ id: customer.id, status: newStatus });
   };
 
   const handleDelete = (customer: Customer) => {
+    if (!isAdmin) {
+      toast.error("Only administrators can delete customers");
+      return;
+    }
     if (
       window.confirm(
         `Are you sure you want to delete ${customer.firstName} ${customer.lastName}?`
@@ -121,6 +161,46 @@ export const Customers = () => {
       color: "bg-red-500",
     },
   ];
+
+  // Handle forbidden resource error
+  if (error && (error as any)?.response?.status === 403) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Customers</h1>
+            <p className="text-gray-600 mt-1">Manage your customer accounts</p>
+          </div>
+        </div>
+        <Card>
+          <div className="text-center py-12">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
+              <svg
+                className="w-8 h-8 text-red-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Access Denied
+            </h3>
+            <p className="text-gray-600 max-w-md mx-auto">
+              You don't have permission to view customer information. Please
+              contact your administrator for access.
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

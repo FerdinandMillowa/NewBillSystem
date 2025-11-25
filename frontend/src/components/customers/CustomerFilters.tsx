@@ -28,7 +28,7 @@ export const CustomerFilters = ({
           value={filters.status}
           onChange={(e) => onFilterChange({ status: e.target.value })}
         >
-          <option value="">All Status</option>
+          <option value="">All</option>
           <option value="approved">Approved</option>
           <option value="pending">Pending</option>
         </select>

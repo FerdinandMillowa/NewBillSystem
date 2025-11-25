@@ -31,16 +31,39 @@ export const Payments = () => {
     limit: 10,
   });
 
+  // Clean filters helper - removes empty strings
+  const cleanFilters = (filters: any) => {
+    const cleaned: any = {};
+    Object.keys(filters).forEach((key) => {
+      if (
+        filters[key] !== "" &&
+        filters[key] !== null &&
+        filters[key] !== undefined
+      ) {
+        cleaned[key] = filters[key];
+      }
+    });
+    return cleaned;
+  };
+
   // Fetch payments
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["payments", filters],
-    queryFn: () => paymentsService.getAll(filters),
+    queryFn: () => paymentsService.getAll(cleanFilters(filters)),
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 403) return false;
+      return failureCount < 2;
+    },
   });
 
   // Fetch stats
   const { data: stats } = useQuery({
     queryKey: ["payment-stats"],
     queryFn: () => paymentsService.getStats(),
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 403) return false;
+      return failureCount < 2;
+    },
   });
 
   // Delete payment mutation
@@ -52,12 +75,20 @@ export const Payments = () => {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       toast.success("Payment deleted successfully!");
     },
-    onError: () => {
-      toast.error("Failed to delete payment");
+    onError: (error: any) => {
+      if (error?.response?.status === 403) {
+        toast.error("You don't have permission to delete payments");
+      } else {
+        toast.error("Failed to delete payment");
+      }
     },
   });
 
   const handleDelete = (payment: Payment) => {
+    if (!isAdmin) {
+      toast.error("Only administrators can delete payments");
+      return;
+    }
     if (
       window.confirm(
         `Are you sure you want to delete this payment for ${formatCurrency(
@@ -100,6 +131,48 @@ export const Payments = () => {
       subtext: "Per transaction",
     },
   ];
+
+  // Handle forbidden resource error
+  if (error && (error as any)?.response?.status === 403) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Payments</h1>
+            <p className="text-gray-600 mt-1">
+              Record and manage customer payments
+            </p>
+          </div>
+        </div>
+        <Card>
+          <div className="text-center py-12">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
+              <svg
+                className="w-8 h-8 text-red-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Access Denied
+            </h3>
+            <p className="text-gray-600 max-w-md mx-auto">
+              You don't have permission to view payments. Please contact your
+              administrator for access.
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

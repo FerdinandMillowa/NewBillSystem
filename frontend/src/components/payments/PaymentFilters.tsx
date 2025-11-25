@@ -26,7 +26,9 @@ export const PaymentFilters = ({
         <select
           className="input"
           value={filters.customerId}
-          onChange={(e) => onFilterChange({ customerId: e.target.value })}
+          onChange={(e) =>
+            onFilterChange({ customerId: e.target.value || undefined })
+          }
         >
           <option value="">All Customers</option>
           {customersData?.customers?.map((customer: any) => (
@@ -40,7 +42,9 @@ export const PaymentFilters = ({
         <select
           className="input"
           value={filters.paymentMethod}
-          onChange={(e) => onFilterChange({ paymentMethod: e.target.value })}
+          onChange={(e) =>
+            onFilterChange({ paymentMethod: e.target.value || undefined })
+          }
         >
           <option value="">All Methods</option>
           <option value="cash">Cash</option>

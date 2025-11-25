@@ -23,7 +23,9 @@ export const BillFilters = ({ filters, onFilterChange }: BillFiltersProps) => {
         <select
           className="input"
           value={filters.customerId}
-          onChange={(e) => onFilterChange({ customerId: e.target.value })}
+          onChange={(e) =>
+            onFilterChange({ customerId: e.target.value || undefined })
+          }
         >
           <option value="">All Customers</option>
           {customersData?.customers?.map((customer: any) => (

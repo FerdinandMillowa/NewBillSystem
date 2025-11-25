@@ -30,7 +30,7 @@ api.interceptors.response.use(
   async (error: AxiosError<{ message: string }>) => {
     const originalRequest = error.config;
 
-    // Handle 401 Unauthorized
+    // Handle 401 Unauthorized - Token expired
     if (error.response?.status === 401 && originalRequest) {
       // Try to refresh token
       const refreshToken = localStorage.getItem('refreshToken');
@@ -65,9 +65,25 @@ api.interceptors.response.use(
       }
     }
 
-    // Show error toast
-    const message = error.response?.data?.message || 'An error occurred';
-    toast.error(message);
+    // Handle 403 Forbidden - Don't show toast, let component handle it
+    if (error.response?.status === 403) {
+      // Silently reject - component will handle display
+      return Promise.reject(error);
+    }
+
+    // Handle other errors - Show toast for non-403 errors
+    if (error.response?.status !== 403) {
+      const message = error.response?.data?.message || 'An error occurred';
+      
+      // Don't show toast for validation errors (400) if there are field-specific errors
+      // Component forms will handle those
+      if (error.response?.status === 400 && error.response?.data?.message?.includes('validation')) {
+        // Let the form handle validation errors
+        return Promise.reject(error);
+      }
+      
+      toast.error(message);
+    }
 
     return Promise.reject(error);
   }

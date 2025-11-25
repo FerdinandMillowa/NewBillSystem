@@ -33,33 +33,33 @@ export class CustomersController {
     return this.customersService.create(createCustomerDto);
   }
 
-  // Get all customers with filters (authenticated users)
+  // Get all customers with filters (ANY authenticated user can view)
   @Get()
   findAll(@Query() queryDto: QueryCustomersDto) {
     return this.customersService.findAll(queryDto);
   }
 
-  // Get customer statistics (admin only)
+  // Get customer statistics (ANY authenticated user can view)
+  // FIXED: Removed @Roles(UserRole.ADMIN) decorator
   @Get('stats')
-  @Roles(UserRole.ADMIN)
   getCustomerStats() {
     return this.customersService.getCustomerStats();
   }
 
-  // Get pending approvals (admin only)
+  // Get pending approvals (admin only - needs approval permission)
   @Get('pending')
   @Roles(UserRole.ADMIN)
   getPendingApprovals() {
     return this.customersService.getPendingApprovals();
   }
 
-  // Get single customer with balance
+  // Get single customer with balance (any authenticated user)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.customersService.findOneWithBalance(id);
   }
 
-  // Update customer
+  // Update customer (any authenticated user can update)
   @Patch(':id')
   update(
     @Param('id') id: string,
