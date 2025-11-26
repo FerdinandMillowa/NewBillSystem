@@ -8,48 +8,58 @@ import { UserRole } from '../common/enums';
 
 @Controller('reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN) // All reports are admin-only
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
-  // Get dashboard statistics
+  // Get dashboard statistics (ANY authenticated user can view)
+  // FIXED: Removed admin-only restriction for dashboard stats
+  // This is used on the main dashboard page for cards/charts
   @Get('dashboard')
   getDashboardStats() {
     return this.reportsService.getDashboardStats();
   }
 
-  // Get daily report
-  @Get('daily')
-  getDailyReport(@Query() dateRangeDto: DateRangeDto) {
-    return this.reportsService.getDailyReport(dateRangeDto);
-  }
-
-  // Get monthly report
-  @Get('monthly')
-  getMonthlyReport(@Query() dateRangeDto: DateRangeDto) {
-    return this.reportsService.getMonthlyReport(dateRangeDto);
-  }
-
-  // Get outstanding balances
-  @Get('outstanding')
-  getOutstandingBalances() {
-    return this.reportsService.getOutstandingBalances();
-  }
-
-  // Get payment method distribution
+  // Get payment method distribution (ANY authenticated user can view)
+  // FIXED: Used in dashboard charts, should be accessible to all
   @Get('payment-methods')
   getPaymentMethodDistribution() {
     return this.reportsService.getPaymentMethodDistribution();
   }
 
-  // Get revenue report
+  // Get monthly report (ANY authenticated user can view)
+  // FIXED: Used in dashboard charts, should be accessible to all
+  @Get('monthly')
+  getMonthlyReport(@Query() dateRangeDto: DateRangeDto) {
+    return this.reportsService.getMonthlyReport(dateRangeDto);
+  }
+
+  // ========== ADMIN-ONLY REPORTS BELOW ==========
+  // These are for the dedicated Reports & Analytics page
+
+  // Get daily report (admin only)
+  @Get('daily')
+  @Roles(UserRole.ADMIN)
+  getDailyReport(@Query() dateRangeDto: DateRangeDto) {
+    return this.reportsService.getDailyReport(dateRangeDto);
+  }
+
+  // Get outstanding balances (admin only)
+  @Get('outstanding')
+  @Roles(UserRole.ADMIN)
+  getOutstandingBalances() {
+    return this.reportsService.getOutstandingBalances();
+  }
+
+  // Get revenue report (admin only)
   @Get('revenue')
+  @Roles(UserRole.ADMIN)
   getRevenueReport(@Query() dateRangeDto: DateRangeDto) {
     return this.reportsService.getRevenueReport(dateRangeDto);
   }
 
-  // Get top paying customers
+  // Get top paying customers (admin only)
   @Get('top-customers')
+  @Roles(UserRole.ADMIN)
   getTopCustomers(@Query('limit') limit?: number) {
     return this.reportsService.getTopCustomers(limit);
   }

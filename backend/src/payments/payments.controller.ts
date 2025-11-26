@@ -25,46 +25,46 @@ import { UserRole } from '../common/enums';
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
-  // Record new payment (authenticated users)
+  // Record new payment (any authenticated user)
   @Post()
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createPaymentDto: CreatePaymentDto) {
     return this.paymentsService.create(createPaymentDto);
   }
 
-  // Get all payments with filters (authenticated users)
+  // Get all payments with filters (any authenticated user)
   @Get()
   findAll(@Query() queryDto: QueryPaymentsDto) {
     return this.paymentsService.findAll(queryDto);
   }
 
-  // Get payment statistics (admin only)
+  // Get payment statistics (ANY authenticated user can view)
+  // FIXED: Removed @Roles(UserRole.ADMIN) decorator
   @Get('stats')
-  @Roles(UserRole.ADMIN)
   getPaymentStats() {
     return this.paymentsService.getPaymentStats();
   }
 
-  // Get recent payments (admin only)
+  // Get recent payments (ANY authenticated user can view)
+  // FIXED: Removed @Roles(UserRole.ADMIN) decorator
   @Get('recent')
-  @Roles(UserRole.ADMIN)
   getRecentPayments(@Query('limit') limit?: number) {
     return this.paymentsService.getRecentPayments(limit);
   }
 
-  // Get single payment
+  // Get single payment (any authenticated user)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.paymentsService.findOne(id);
   }
 
-  // Get payments by customer
+  // Get payments by customer (any authenticated user)
   @Get('customer/:customerId')
   findByCustomer(@Param('customerId') customerId: string) {
     return this.paymentsService.findByCustomer(customerId);
   }
 
-  // Update payment
+  // Update payment (any authenticated user)
   @Patch(':id')
   update(@Param('id') id: string, @Body() updatePaymentDto: UpdatePaymentDto) {
     return this.paymentsService.update(id, updatePaymentDto);

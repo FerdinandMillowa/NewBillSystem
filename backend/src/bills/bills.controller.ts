@@ -25,46 +25,46 @@ import { UserRole } from '../common/enums';
 export class BillsController {
   constructor(private readonly billsService: BillsService) {}
 
-  // Create new bill (authenticated users)
+  // Create new bill (any authenticated user)
   @Post()
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createBillDto: CreateBillDto) {
     return this.billsService.create(createBillDto);
   }
 
-  // Get all bills with filters (authenticated users)
+  // Get all bills with filters (any authenticated user)
   @Get()
   findAll(@Query() queryDto: QueryBillsDto) {
     return this.billsService.findAll(queryDto);
   }
 
-  // Get bill statistics (admin only)
+  // Get bill statistics (ANY authenticated user can view)
+  // FIXED: Removed @Roles(UserRole.ADMIN) decorator
   @Get('stats')
-  @Roles(UserRole.ADMIN)
   getBillStats() {
     return this.billsService.getBillStats();
   }
 
-  // Get recent bills (admin only)
+  // Get recent bills (ANY authenticated user can view)
+  // FIXED: Removed @Roles(UserRole.ADMIN) decorator
   @Get('recent')
-  @Roles(UserRole.ADMIN)
   getRecentBills(@Query('limit') limit?: number) {
     return this.billsService.getRecentBills(limit);
   }
 
-  // Get single bill
+  // Get single bill (any authenticated user)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.billsService.findOne(id);
   }
 
-  // Get bills by customer
+  // Get bills by customer (any authenticated user)
   @Get('customer/:customerId')
   findByCustomer(@Param('customerId') customerId: string) {
     return this.billsService.findByCustomer(customerId);
   }
 
-  // Update bill
+  // Update bill (any authenticated user)
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateBillDto: UpdateBillDto) {
     return this.billsService.update(id, updateBillDto);
