@@ -13,22 +13,40 @@ export const PreferencesSection = () => {
     settingsService.getPreferences()
   );
 
+  // Apply theme whenever it changes
   useEffect(() => {
-    // Apply theme preference
-    const root = document.documentElement;
-    if (
-      preferences.theme === "dark" ||
-      (preferences.theme === "auto" &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches)
-    ) {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+    applyTheme(preferences.theme);
   }, [preferences.theme]);
 
+  const applyTheme = (theme: string) => {
+    const root = document.documentElement;
+
+    // Remove any existing theme classes
+    root.classList.remove("dark", "light");
+
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else if (theme === "light") {
+      root.classList.add("light");
+    } else if (theme === "auto") {
+      // For auto, check system preference
+      if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        root.classList.add("dark");
+      } else {
+        root.classList.add("light");
+      }
+    }
+  };
+
   const handlePreferenceChange = (key: keyof SystemPreferences, value: any) => {
-    setPreferences((prev) => ({ ...prev, [key]: value }));
+    setPreferences((prev) => {
+      const updated = { ...prev, [key]: value };
+      // Auto-save theme changes immediately for instant feedback
+      if (key === "theme") {
+        settingsService.savePreferences(updated);
+      }
+      return updated;
+    });
   };
 
   const handleNotificationChange = (
@@ -82,23 +100,46 @@ export const PreferencesSection = () => {
                 value: "light",
                 label: "Light",
                 description: "Always light mode",
+                icon: "☀️",
               },
-              { value: "dark", label: "Dark", description: "Always dark mode" },
+              {
+                value: "dark",
+                label: "Dark",
+                description: "Always dark mode",
+                icon: "🌙",
+              },
               {
                 value: "auto",
                 label: "Auto",
                 description: "Follow system preference",
+                icon: "💻",
               },
             ].map((theme) => (
               <button
                 key={theme.value}
                 onClick={() => handlePreferenceChange("theme", theme.value)}
-                className={`p-4 border-2 rounded-lg text-left transition-colors ${
+                className={`p-4 border-2 rounded-lg text-left transition-all hover:shadow-md ${
                   preferences.theme === theme.value
-                    ? "border-primary-500 bg-primary-50"
+                    ? "border-primary-500 bg-primary-50 shadow-sm"
                     : "border-gray-200 hover:border-gray-300"
                 }`}
               >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-2xl">{theme.icon}</span>
+                  {preferences.theme === theme.value && (
+                    <svg
+                      className="w-5 h-5 text-primary-600"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  )}
+                </div>
                 <div className="font-medium text-gray-900">{theme.label}</div>
                 <div className="text-sm text-gray-500 mt-1">
                   {theme.description}
@@ -106,6 +147,9 @@ export const PreferencesSection = () => {
               </button>
             ))}
           </div>
+          <p className="text-sm text-gray-500 mt-2">
+            ℹ️ Theme changes apply instantly
+          </p>
         </div>
 
         {/* Language and Formatting */}

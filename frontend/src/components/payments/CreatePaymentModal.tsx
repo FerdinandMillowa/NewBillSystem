@@ -35,10 +35,16 @@ const paymentMethods = [
     color: "text-green-600",
   },
   {
-    value: "mobile_money" as PaymentMethod,
-    label: "Mobile Money",
+    value: "mpamba" as PaymentMethod,
+    label: "Mpamba",
     icon: DevicePhoneMobileIcon,
     color: "text-blue-600",
+  },
+  {
+    value: "airtel_money" as PaymentMethod,
+    label: "Airtel Money",
+    icon: DevicePhoneMobileIcon,
+    color: "text-red-600",
   },
   {
     value: "bank" as PaymentMethod,
@@ -228,10 +234,10 @@ export const CreatePaymentModal = ({
                     {...register("amount", { valueAsNumber: true })}
                   />
 
-                  {/* Payment Method */}
+                  {/* Payment Method - Now shows 5 options in grid */}
                   <div>
                     <label className="label">Payment Method *</label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {paymentMethods.map((method) => {
                         const Icon = method.icon;
                         const isSelected = selectedMethod === method.value;

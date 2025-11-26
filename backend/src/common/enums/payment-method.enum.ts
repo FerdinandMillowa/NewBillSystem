@@ -1,6 +1,7 @@
 export enum PaymentMethod {
   CASH = 'cash',
-  MOBILE_MONEY = 'mobile_money',
+  MPAMBA = 'mpamba', // NEW: TNM Mpamba
+  AIRTEL_MONEY = 'airtel_money', // NEW: Airtel Money
   BANK = 'bank',
   CARD = 'card',
 }

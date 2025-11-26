@@ -11,6 +11,7 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import toast from "react-hot-toast";
 import { z } from "zod";
+import { formatDate } from "../../utils/formatters";
 
 const profileSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -62,6 +63,10 @@ export const ProfileSection = ({ profile }: ProfileSectionProps) => {
     reset();
     setIsEditing(false);
   };
+
+  // Format dates properly
+  const memberSince = formatDate(profile.createdAt);
+  const lastUpdated = formatDate(profile.updatedAt);
 
   return (
     <div className="p-6">
@@ -121,17 +126,11 @@ export const ProfileSection = ({ profile }: ProfileSectionProps) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="label">Member Since</label>
-            <Input
-              value={new Date(profile.createdAt).toLocaleDateString()}
-              disabled
-            />
+            <Input value={memberSince} disabled />
           </div>
           <div>
             <label className="label">Last Updated</label>
-            <Input
-              value={new Date(profile.updatedAt).toLocaleDateString()}
-              disabled
-            />
+            <Input value={lastUpdated} disabled />
           </div>
         </div>
 
