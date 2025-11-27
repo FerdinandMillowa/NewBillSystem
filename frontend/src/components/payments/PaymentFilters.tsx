@@ -48,7 +48,8 @@ export const PaymentFilters = ({
         >
           <option value="">All Methods</option>
           <option value="cash">Cash</option>
-          <option value="mobile_money">Mobile Money</option>
+          <option value="mpamba">Mpamba</option>
+          <option value="airtel_money">Airtel Money</option>
           <option value="bank">Bank Transfer</option>
           <option value="card">Card</option>
         </select>

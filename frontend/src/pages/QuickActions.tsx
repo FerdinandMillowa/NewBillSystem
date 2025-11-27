@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customersService } from "../services/customers.service";
 import { billsService } from "../services/bills.service";
 import { paymentsService } from "../services/payments.service";
@@ -25,6 +25,8 @@ import { formatCurrency } from "../utils/formatters";
 
 export const QuickActions = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
   const [isCreateCustomerOpen, setIsCreateCustomerOpen] = useState(false);
   const [isCreateBillOpen, setIsCreateBillOpen] = useState(false);
   const [isCreatePaymentOpen, setIsCreatePaymentOpen] = useState(false);
@@ -55,6 +57,28 @@ export const QuickActions = () => {
     queryKey: ["recent-payments"],
     queryFn: () => paymentsService.getRecent(3),
   });
+
+  // Handle modal close and refresh data
+  const handleCloseCustomerModal = () => {
+    setIsCreateCustomerOpen(false);
+    // Refresh stats and recent data
+    queryClient.invalidateQueries({ queryKey: ["customer-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["customers"] });
+  };
+
+  const handleCloseBillModal = () => {
+    setIsCreateBillOpen(false);
+    // Refresh stats and recent data
+    queryClient.invalidateQueries({ queryKey: ["bill-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["recent-bills"] });
+  };
+
+  const handleClosePaymentModal = () => {
+    setIsCreatePaymentOpen(false);
+    // Refresh stats and recent data
+    queryClient.invalidateQueries({ queryKey: ["payment-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["recent-payments"] });
+  };
 
   const quickActions = [
     {
@@ -205,8 +229,7 @@ export const QuickActions = () => {
             return (
               <Card
                 key={action.id}
-                className="group cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 relative overflow-hidden"
-                onClick={action.action}
+                className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1"
               >
                 {/* Background gradient on hover */}
                 <div
@@ -228,10 +251,14 @@ export const QuickActions = () => {
                     {action.description}
                   </p>
 
-                  <div className="flex items-center text-primary-600 dark:text-primary-400 font-medium text-sm group-hover:translate-x-2 transition-transform">
+                  <Button
+                    variant="primary"
+                    onClick={action.action}
+                    className="w-full flex items-center justify-center group-hover:translate-x-2 transition-transform"
+                  >
                     Get Started
                     <ArrowRightIcon className="w-4 h-4 ml-2" />
-                  </div>
+                  </Button>
                 </div>
               </Card>
             );
@@ -384,15 +411,15 @@ export const QuickActions = () => {
       {/* Modals */}
       <CreateCustomerModal
         isOpen={isCreateCustomerOpen}
-        onClose={() => setIsCreateCustomerOpen(false)}
+        onClose={handleCloseCustomerModal}
       />
       <CreateBillModal
         isOpen={isCreateBillOpen}
-        onClose={() => setIsCreateBillOpen(false)}
+        onClose={handleCloseBillModal}
       />
       <CreatePaymentModal
         isOpen={isCreatePaymentOpen}
-        onClose={() => setIsCreatePaymentOpen(false)}
+        onClose={handleClosePaymentModal}
       />
     </div>
   );

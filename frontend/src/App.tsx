@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AuthProvider } from "./context/AuthContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { Layout } from "./components/layout/Layout";
 import { Login } from "./pages/Login";
@@ -25,14 +25,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-// Component to handle root redirect based on user role
-const RootRedirect = () => {
-  const { isAdmin } = useAuth();
-
-  // Admin goes to dashboard, regular user goes to quick actions
-  return <Navigate to={isAdmin ? "/dashboard" : "/quick-actions"} replace />;
-};
 
 function App() {
   // Initialize theme on app mount
@@ -104,7 +96,7 @@ function App() {
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
               <Route element={<Layout />}>
-                {/* Quick Actions - Landing page for regular users */}
+                {/* Quick Actions - Landing page for ALL users */}
                 <Route path="/quick-actions" element={<QuickActions />} />
 
                 {/* Dashboard and other pages */}
@@ -115,18 +107,14 @@ function App() {
                 <Route path="/payments" element={<Payments />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/settings" element={<Settings />} />
+
+                {/* Redirect root to Quick Actions for ALL users */}
+                <Route
+                  path="/"
+                  element={<Navigate to="/quick-actions" replace />}
+                />
               </Route>
             </Route>
-
-            {/* Redirect root based on user role */}
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <RootRedirect />
-                </ProtectedRoute>
-              }
-            />
 
             {/* 404 */}
             <Route path="*" element={<NotFound />} />
