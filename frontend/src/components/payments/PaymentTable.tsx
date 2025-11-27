@@ -30,12 +30,17 @@ const getPaymentMethodIcon = (method: string) => {
   switch (method) {
     case "cash":
       return BanknotesIcon;
-    case "mobile_money":
+    case "mpamba":
+      return DevicePhoneMobileIcon;
+    case "airtel_money":
       return DevicePhoneMobileIcon;
     case "bank":
       return BuildingLibraryIcon;
     case "card":
       return CreditCardIcon;
+    // Legacy support
+    case "mobile_money":
+      return DevicePhoneMobileIcon;
     default:
       return BanknotesIcon;
   }
@@ -45,12 +50,17 @@ const getPaymentMethodColor = (method: string) => {
   switch (method) {
     case "cash":
       return "bg-green-100 text-green-800";
-    case "mobile_money":
+    case "mpamba":
       return "bg-blue-100 text-blue-800";
+    case "airtel_money":
+      return "bg-red-100 text-red-800";
     case "bank":
       return "bg-purple-100 text-purple-800";
     case "card":
       return "bg-orange-100 text-orange-800";
+    // Legacy support
+    case "mobile_money":
+      return "bg-blue-100 text-blue-800";
     default:
       return "bg-gray-100 text-gray-800";
   }

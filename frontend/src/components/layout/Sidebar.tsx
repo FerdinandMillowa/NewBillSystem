@@ -7,6 +7,7 @@ import {
   CreditCardIcon,
   ChartBarIcon,
   Cog6ToothIcon,
+  SparklesIcon,
 } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 
@@ -22,6 +23,18 @@ const navigation = [
   },
   { name: "Reports", href: "/reports", icon: ChartBarIcon, adminOnly: true },
   { name: "Settings", href: "/settings", icon: Cog6ToothIcon, adminOnly: true },
+  {
+    name: "Quick Actions",
+    href: "/quick-actions",
+    icon: SparklesIcon,
+    description: "Fast access to daily tasks",
+  },
+  {
+    name: "Dashboard",
+    href: "/dashboard",
+    icon: HomeIcon,
+    description: "Overview and analytics",
+  },
 ];
 
 export const Sidebar = () => {

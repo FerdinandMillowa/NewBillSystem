@@ -217,15 +217,25 @@ export const Payments = () => {
       {/* Payment Methods Distribution */}
       {stats?.paymentsByMethod && stats.paymentsByMethod.length > 0 && (
         <Card title="Payment Methods">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {stats.paymentsByMethod.map((method: any) => (
               <div
                 key={method.method}
                 className="text-center p-4 bg-gray-50 rounded-lg"
               >
                 <BanknotesIcon className="w-8 h-8 text-primary-600 mx-auto mb-2" />
-                <p className="text-sm text-gray-600 capitalize">
-                  {method.method.replace("_", " ")}
+                <p className="text-sm text-gray-600 font-medium">
+                  {method.method === "mpamba"
+                    ? "Mpamba"
+                    : method.method === "airtel_money"
+                    ? "Airtel Money"
+                    : method.method === "cash"
+                    ? "Cash"
+                    : method.method === "bank"
+                    ? "Bank Transfer"
+                    : method.method === "card"
+                    ? "Card"
+                    : method.method.replace("_", " ")}
                 </p>
                 <p className="text-lg font-bold text-gray-900">
                   {formatCurrency(method.total)}
