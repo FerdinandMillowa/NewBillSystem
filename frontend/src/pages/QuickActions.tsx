@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customersService } from "../services/customers.service";
 import { billsService } from "../services/bills.service";
 import { paymentsService } from "../services/payments.service";
+import { dailySalesService } from "../services/daily-sales.service";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { CreateCustomerModal } from "../components/customers/CreateCustomerModal";
@@ -20,8 +21,12 @@ import {
   ArrowRightIcon,
   SparklesIcon,
   ClockIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  PlusIcon,
 } from "@heroicons/react/24/outline";
 import { formatCurrency } from "../utils/formatters";
+import { format } from "date-fns";
 
 export const QuickActions = () => {
   const navigate = useNavigate();
@@ -47,6 +52,13 @@ export const QuickActions = () => {
     queryFn: () => paymentsService.getStats(),
   });
 
+  // Fetch today's daily sales
+  const { data: todayDailySales } = useQuery({
+    queryKey: ["daily-sales-today"],
+    queryFn: () => dailySalesService.getToday(),
+    retry: false,
+  });
+
   // Recent activity
   const { data: recentBills } = useQuery({
     queryKey: ["recent-bills"],
@@ -61,21 +73,18 @@ export const QuickActions = () => {
   // Handle modal close and refresh data
   const handleCloseCustomerModal = () => {
     setIsCreateCustomerOpen(false);
-    // Refresh stats and recent data
     queryClient.invalidateQueries({ queryKey: ["customer-stats"] });
     queryClient.invalidateQueries({ queryKey: ["customers"] });
   };
 
   const handleCloseBillModal = () => {
     setIsCreateBillOpen(false);
-    // Refresh stats and recent data
     queryClient.invalidateQueries({ queryKey: ["bill-stats"] });
     queryClient.invalidateQueries({ queryKey: ["recent-bills"] });
   };
 
   const handleClosePaymentModal = () => {
     setIsCreatePaymentOpen(false);
-    // Refresh stats and recent data
     queryClient.invalidateQueries({ queryKey: ["payment-stats"] });
     queryClient.invalidateQueries({ queryKey: ["recent-payments"] });
   };
@@ -110,6 +119,16 @@ export const QuickActions = () => {
       iconBg: "bg-green-100 dark:bg-green-900",
       iconColor: "text-green-600 dark:text-green-400",
       action: () => setIsCreatePaymentOpen(true),
+    },
+    {
+      id: "daily-sales",
+      title: "Complete Daily Sales",
+      description: "Enter today's sales, inventory & expenses",
+      icon: ChartBarIcon,
+      color: "from-orange-500 to-orange-600",
+      iconBg: "bg-orange-100 dark:bg-orange-900",
+      iconColor: "text-orange-600 dark:text-orange-400",
+      action: () => navigate("/daily-sales"),
     },
   ];
 
@@ -214,6 +233,126 @@ export const QuickActions = () => {
         ))}
       </div>
 
+      {/* Today's Daily Sales Widget */}
+      {todayDailySales ? (
+        <Card className="bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-900/20 dark:to-primary-800/20 border border-primary-200 dark:border-primary-800">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-bold text-primary-900 dark:text-primary-100">
+                Today's Daily Sales
+              </h3>
+              <p className="text-sm text-primary-700 dark:text-primary-300">
+                {format(new Date(), "EEEE, MMMM d, yyyy")}
+              </p>
+            </div>
+            <div>
+              <span
+                className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                  todayDailySales.status === "finalized"
+                    ? "bg-green-500 text-white"
+                    : "bg-yellow-500 text-white"
+                }`}
+              >
+                {todayDailySales.status === "finalized" ? (
+                  <>
+                    <CheckCircleIcon className="w-4 h-4 mr-1" />
+                    Finalized
+                  </>
+                ) : (
+                  <>
+                    <ClockIcon className="w-4 h-4 mr-1" />
+                    Draft
+                  </>
+                )}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white/80 dark:bg-gray-800/80 p-4 rounded-lg">
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                Total Sales
+              </p>
+              <p className="text-xl font-bold text-primary-600 dark:text-primary-400">
+                {formatCurrency(todayDailySales.totalSales)}
+              </p>
+            </div>
+            <div className="bg-white/80 dark:bg-gray-800/80 p-4 rounded-lg">
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                Collected
+              </p>
+              <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                {formatCurrency(todayDailySales.totalCollected)}
+              </p>
+            </div>
+            <div className="bg-white/80 dark:bg-gray-800/80 p-4 rounded-lg">
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                Expenses
+              </p>
+              <p className="text-xl font-bold text-red-600 dark:text-red-400">
+                {formatCurrency(todayDailySales.totalExpenses)}
+              </p>
+            </div>
+            <div className="bg-white/80 dark:bg-gray-800/80 p-4 rounded-lg">
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                Net Revenue
+              </p>
+              <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                {formatCurrency(todayDailySales.netRevenue)}
+              </p>
+            </div>
+          </div>
+
+          {todayDailySales.shortage > 0 && (
+            <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg">
+              <div className="flex items-center">
+                <ExclamationTriangleIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mr-2" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                    Shortage: {formatCurrency(todayDailySales.shortage)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-4">
+            <Button
+              variant="primary"
+              onClick={() => navigate("/daily-sales")}
+              className="w-full flex items-center justify-center"
+            >
+              {todayDailySales.status === "draft"
+                ? "Continue Editing"
+                : "View Details"}
+              <ArrowRightIcon className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border border-orange-200 dark:border-orange-800">
+          <div className="text-center py-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500 rounded-full mb-4">
+              <ChartBarIcon className="w-8 h-8 text-white" />
+            </div>
+            <h3 className="text-lg font-bold text-orange-900 dark:text-orange-100 mb-2">
+              No Daily Sales Entry Yet
+            </h3>
+            <p className="text-sm text-orange-700 dark:text-orange-300 mb-4">
+              Start recording today's sales, inventory, and expenses
+            </p>
+            <Button
+              variant="primary"
+              onClick={() => navigate("/daily-sales")}
+              className="inline-flex items-center"
+            >
+              <PlusIcon className="w-5 h-5 mr-2" />
+              Start Daily Sales Entry
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Main Quick Actions */}
       <div>
         <div className="flex items-center space-x-2 mb-6">
@@ -223,7 +362,7 @@ export const QuickActions = () => {
           <div className="flex-1 h-px bg-gradient-to-r from-gray-300 to-transparent dark:from-gray-700" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {quickActions.map((action) => {
             const Icon = action.icon;
             return (

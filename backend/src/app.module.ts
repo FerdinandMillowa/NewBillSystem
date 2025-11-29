@@ -11,6 +11,9 @@ import { BillsModule } from './bills/bills.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ReportsModule } from './reports/reports.module';
 import { ActivityLogsModule } from './activity-logs/activity-logs.module';
+import { ProductsModule } from './products/products.module';
+import { ProductCategoriesModule } from './product-categories/product-categories.module';
+import { DailySalesModule } from './daily-sales/daily-sales.module';
 
 @Module({
   imports: [
@@ -32,6 +35,9 @@ import { ActivityLogsModule } from './activity-logs/activity-logs.module';
     PaymentsModule,
     ReportsModule,
     ActivityLogsModule,
+    ProductsModule,
+    ProductCategoriesModule,
+    DailySalesModule,
   ],
   controllers: [AppController],
   providers: [],

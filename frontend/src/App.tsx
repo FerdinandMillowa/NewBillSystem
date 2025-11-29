@@ -14,6 +14,8 @@ import { Payments } from "./pages/Payments";
 import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { CustomerDetails } from "./pages/CustomerDetails";
+import { Products } from "./pages/Products";
+import { DailySales } from "./pages/DailySales";
 
 // Create query client
 const queryClient = new QueryClient({
@@ -106,7 +108,9 @@ function App() {
                 <Route path="/bills" element={<Bills />} />
                 <Route path="/payments" element={<Payments />} />
                 <Route path="/reports" element={<Reports />} />
+                <Route path="/products" element={<Products />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/daily-sales" element={<DailySales />} />
 
                 {/* Redirect root to Quick Actions for ALL users */}
                 <Route

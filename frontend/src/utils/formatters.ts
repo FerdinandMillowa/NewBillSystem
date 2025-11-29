@@ -1,5 +1,6 @@
-import { format, formatDistanceToNow } from 'date-fns';
 
+import { format, formatDistanceToNow } from 'date-fns';
+import type { Product } from '../types/product.types';
 export const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-MW', {
     style: 'currency',
@@ -57,4 +58,38 @@ export const getStatusBadgeColor = (status: string): string => {
     inactive: 'bg-red-100 text-red-800',
   };
   return colors[status] || 'bg-gray-100 text-gray-800';
+};
+
+export const formatProductName = (product: Product): string => {
+  if (product.size) {
+    return `${product.name} (${product.size})`;
+  }
+  return product.name;
+};
+
+export const formatUnit = (unit: string | null): string => {
+  if (!unit) return '';
+  const units: Record<string, string> = {
+    bottle: 'Bottle',
+    can: 'Can',
+    shot: 'Shot',
+    piece: 'Piece',
+    pack: 'Pack',
+  };
+  return units[unit] || unit;
+};
+
+export const getStockStatus = (stock: number): {
+  label: string;
+  color: string;
+} => {
+  if (stock === 0) {
+    return { label: 'Out of Stock', color: 'text-red-600 bg-red-100' };
+  } else if (stock < 10) {
+    return { label: 'Low Stock', color: 'text-yellow-600 bg-yellow-100' };
+  } else if (stock < 50) {
+    return { label: 'In Stock', color: 'text-blue-600 bg-blue-100' };
+  } else {
+    return { label: 'Well Stocked', color: 'text-green-600 bg-green-100' };
+  }
 };

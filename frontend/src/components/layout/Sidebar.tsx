@@ -13,6 +13,8 @@ import {
   XMarkIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  CubeIcon,
+  DocumentChartBarIcon,
 } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 
@@ -31,6 +33,18 @@ const navigation = [
     name: "Payments",
     href: "/payments",
     icon: CreditCardIcon,
+    adminOnly: false,
+  },
+  {
+    name: "Products",
+    href: "/products",
+    icon: CubeIcon,
+    adminOnly: true, // Only admins can access
+  },
+  {
+    name: "Daily Sales",
+    href: "/daily-sales",
+    icon: DocumentChartBarIcon, // or use a different icon like DocumentChartBarIcon
     adminOnly: false,
   },
   { name: "Reports", href: "/reports", icon: ChartBarIcon, adminOnly: true },
