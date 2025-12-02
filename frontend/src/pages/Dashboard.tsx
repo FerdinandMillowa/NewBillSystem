@@ -274,17 +274,21 @@ export const Dashboard = () => {
               <Legend />
               <Line
                 type="monotone"
-                dataKey="bills"
+                dataKey="totalSales"
                 stroke="#8b5cf6"
                 strokeWidth={2}
-                name="Bills Issued"
+                name="Total Sales"
+                dot={{ r: 4, fill: "#8b5cf6" }}
+                activeDot={{ r: 6 }}
               />
               <Line
                 type="monotone"
-                dataKey="payments"
+                dataKey="totalCollected"
                 stroke="#10b981"
                 strokeWidth={2}
-                name="Payments Received"
+                name="Collected"
+                dot={{ r: 4, fill: "#10b981" }}
+                activeDot={{ r: 6 }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -292,28 +296,36 @@ export const Dashboard = () => {
 
         {/* Payment Methods Chart */}
         <Card title="Payment Methods Distribution">
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={paymentMethodChartData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={(entry) => `${entry.name}: ${entry.percent}%`}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {paymentMethodChartData.map((entry: any, index: number) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={COLORS[index % COLORS.length]}
-                  />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value: any) => formatCurrency(value)} />
-            </PieChart>
-          </ResponsiveContainer>
+          {paymentMethodChartData && paymentMethodChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={paymentMethodChartData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={(entry) =>
+                    `${entry.name}: ${entry.percentage?.toFixed(1) || 0}%`
+                  }
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {paymentMethodChartData.map((entry: any, index: number) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: any) => formatCurrency(value)} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-gray-500">
+              No payment data available
+            </div>
+          )}
         </Card>
       </div>
 

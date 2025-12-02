@@ -731,65 +731,84 @@ export const Reports = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Monthly Trend Chart */}
             <Card title="Revenue Trend">
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={monthlyData || []}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip
-                    formatter={(value: any) => formatCurrency(value)}
-                    contentStyle={{
-                      backgroundColor: "rgba(255, 255, 255, 0.95)",
-                      border: "1px solid #e5e7eb",
-                    }}
-                  />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="totalSales"
-                    stroke="#8b5cf6"
-                    strokeWidth={2}
-                    name="Total Sales"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="totalCollected"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    name="Collected"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              {monthlyData && monthlyData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value: any) => formatCurrency(value)}
+                      contentStyle={{
+                        backgroundColor: "rgba(255, 255, 255, 0.95)",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="totalSales"
+                      stroke="#8b5cf6"
+                      strokeWidth={2}
+                      name="Total Sales"
+                      dot={{ r: 4, fill: "#8b5cf6" }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="totalCollected"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      name="Collected"
+                      dot={{ r: 4, fill: "#10b981" }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[300px] text-gray-500">
+                  No data available for selected period
+                </div>
+              )}
             </Card>
 
             {/* Payment Methods Chart */}
             <Card title="Payment Methods Distribution">
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={paymentMethods?.breakdown || []}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry) =>
-                      `${entry.name}: ${entry.percent.toFixed(1)}%`
-                    }
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="amount"
-                  >
-                    {(paymentMethods?.breakdown || []).map(
-                      (_entry: any, index: number) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      )
-                    )}
-                  </Pie>
-                  <Tooltip formatter={(value: any) => formatCurrency(value)} />
-                </PieChart>
-              </ResponsiveContainer>
+              {paymentMethods?.breakdown &&
+              paymentMethods.breakdown.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={paymentMethods.breakdown}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={(entry) =>
+                        `${entry.name}: ${entry.percentage?.toFixed(1) || 0}%`
+                      }
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="amount"
+                    >
+                      {paymentMethods.breakdown.map(
+                        (_entry: any, index: number) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={COLORS[index % COLORS.length]}
+                          />
+                        )
+                      )}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: any) => formatCurrency(value)}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[300px] text-gray-500">
+                  No payment method data available
+                </div>
+              )}
             </Card>
           </div>
         </div>
