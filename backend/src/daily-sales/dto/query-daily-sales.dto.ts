@@ -1,4 +1,11 @@
-import { IsOptional, IsDateString, IsInt, Min } from 'class-validator';
+import {
+  IsOptional,
+  IsDateString,
+  IsInt,
+  Min,
+  IsString,
+  IsEnum,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class QueryDailySalesDto {
@@ -9,6 +16,10 @@ export class QueryDailySalesDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string; // 'draft' or 'finalized'
 
   @IsOptional()
   @Type(() => Number)

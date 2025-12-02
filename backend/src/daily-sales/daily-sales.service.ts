@@ -5,7 +5,13 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
+import {
+  Repository,
+  Between,
+  MoreThanOrEqual,
+  LessThanOrEqual,
+  IsNull,
+} from 'typeorm';
 import { DailySales } from '../database/entities/daily-sales.entity';
 import { DailyInventory } from '../database/entities/daily-inventory.entity';
 import { DailyExpense } from '../database/entities/daily-expense.entity';
@@ -48,88 +54,34 @@ export class DailySalesService {
 
     if (existingSales) {
       throw new ConflictException(
-        'Daily sales record already exists for this date',
+        'Daily sales record already exists for this date.',
       );
     }
 
-    // Calculate total collected
-    const totalCollected =
-      (salesData.cash || 0) +
-      (salesData.airtelMoney || 0) +
-      (salesData.mpamba || 0) +
-      (salesData.bank || 0);
+    // Check if previous day is finalized (sequential validation)
+    await this.validateSequentialFinalization(new Date(date));
 
-    // Process inventory items and calculate total sales
-    let totalSales = 0;
-    const inventoryRecords: DailyInventory[] = [];
+    // FIX: Fetch bills ONLY for this dailySalesId (initially empty for new records)
+    // We'll link bills when they're created inline
+    const billsForDate = await this.billRepository.find({
+      where: {
+        createdAt: Between(
+          new Date(date + 'T00:00:00'),
+          new Date(date + 'T23:59:59'),
+        ),
+        dailySalesId: IsNull(), // FIX: Use IsNull() instead of null
+      },
+      relations: ['customer'],
+    });
 
-    for (const invItem of inventories) {
-      const product = await this.productRepository.findOne({
-        where: { id: invItem.productId },
-      });
+    // Calculate bills amount
+    const billsAmount = billsForDate.reduce(
+      (sum, bill) => sum + parseFloat(bill.amount?.toString() || '0'),
+      0,
+    );
 
-      if (!product) {
-        throw new NotFoundException(`Product ${invItem.productId} not found`);
-      }
-
-      // Calculate sold quantity
-      const soldQuantity =
-        invItem.openingStock + invItem.stockIn - invItem.closingStock;
-
-      if (soldQuantity < 0) {
-        throw new BadRequestException(
-          `Invalid inventory calculation for ${product.name}. Sold quantity cannot be negative.`,
-        );
-      }
-
-      const revenue = soldQuantity * product.currentPrice;
-      totalSales += revenue;
-
-      inventoryRecords.push(
-        this.dailyInventoryRepository.create({
-          productId: invItem.productId,
-          openingStock: invItem.openingStock,
-          stockIn: invItem.stockIn,
-          closingStock: invItem.closingStock,
-          soldQuantity,
-          productPrice: product.currentPrice,
-          revenue,
-        }),
-      );
-
-      // Update product current stock to closing stock
-      product.currentStock = invItem.closingStock;
-      await this.productRepository.save(product);
-    }
-
-    // Process expenses and calculate totals
-    let totalExpenses = 0;
-    let cashExpenses = 0;
-    const expenseRecords: DailyExpense[] = [];
-
-    if (expenses && expenses.length > 0) {
-      for (const expItem of expenses) {
-        const paymentMethod = expItem.paymentMethod || 'cash';
-        totalExpenses += expItem.amount;
-
-        if (paymentMethod === 'cash') {
-          cashExpenses += expItem.amount;
-        }
-
-        expenseRecords.push(
-          this.dailyExpenseRepository.create({
-            category: expItem.category as any,
-            description: expItem.description,
-            amount: expItem.amount,
-            paymentMethod: paymentMethod as any,
-          }),
-        );
-      }
-    }
-
-    // Process stock purchases
-    let totalStockPurchases = 0;
-    const stockPurchaseRecords: StockPurchase[] = [];
+    // FIX: Process stock purchases and validate Stock In
+    const purchasedProducts = new Map<string, number>(); // productId -> quantity purchased
 
     if (stockPurchases && stockPurchases.length > 0) {
       for (const purchaseItem of stockPurchases) {
@@ -143,42 +95,169 @@ export class DailySalesService {
           );
         }
 
-        const totalCost = purchaseItem.quantity * purchaseItem.unitCost;
+        // Track purchased quantity
+        const existingPurchased =
+          purchasedProducts.get(purchaseItem.productId) || 0;
+        purchasedProducts.set(
+          purchaseItem.productId,
+          existingPurchased + purchaseItem.quantity,
+        );
+      }
+    }
+
+    // FIX: Validate Stock In with Stock Purchases BEFORE processing inventory
+    for (const invItem of inventories) {
+      const stockIn = invItem.stockIn || 0;
+      const purchased = purchasedProducts.get(invItem.productId) || 0;
+
+      // If stockIn > 0, there MUST be a corresponding stock purchase
+      if (stockIn > 0 && purchased === 0) {
+        const product = await this.productRepository.findOne({
+          where: { id: invItem.productId },
+        });
+        throw new BadRequestException(
+          `Stock In entered for "${product?.name}" but no Stock Purchase recorded. Please fill Stock Purchases section or set Stock In to 0.`,
+        );
+      }
+
+      // If both exist, they must match
+      if (stockIn > 0 && purchased > 0 && stockIn !== purchased) {
+        const product = await this.productRepository.findOne({
+          where: { id: invItem.productId },
+        });
+        throw new BadRequestException(
+          `Stock In (${stockIn}) does not match Stock Purchase (${purchased}) for "${product?.name}". They must be equal.`,
+        );
+      }
+    }
+
+    // FIX: Process inventory items and calculate total sales FROM INVENTORY ONLY
+    let totalSalesFromInventory = 0;
+    const inventoryRecords: DailyInventory[] = [];
+
+    for (const invItem of inventories) {
+      const product = await this.productRepository.findOne({
+        where: { id: invItem.productId },
+      });
+
+      if (!product) {
+        throw new NotFoundException(`Product ${invItem.productId} not found`);
+      }
+
+      const actualStockIn = invItem.stockIn || 0;
+      const soldQuantity =
+        invItem.openingStock + actualStockIn - invItem.closingStock;
+
+      if (soldQuantity < 0) {
+        throw new BadRequestException(
+          `Invalid inventory for ${product.name}. Sold quantity cannot be negative.`,
+        );
+      }
+
+      const revenue = soldQuantity * product.currentPrice;
+      totalSalesFromInventory += revenue;
+
+      inventoryRecords.push(
+        this.dailyInventoryRepository.create({
+          productId: invItem.productId,
+          openingStock: invItem.openingStock,
+          stockIn: actualStockIn,
+          closingStock: invItem.closingStock,
+          soldQuantity,
+          productPrice: product.currentPrice,
+          revenue,
+        }),
+      );
+
+      // Update product current stock to closing stock
+      product.currentStock = invItem.closingStock;
+      await this.productRepository.save(product);
+    }
+
+    // FIX: Total Sales = Inventory Sales + Bills
+    const totalSales = totalSalesFromInventory + billsAmount;
+
+    // FIX: Process expenses correctly
+    let totalExpenses = 0;
+    let cashExpenses = 0;
+    const expenseRecords: DailyExpense[] = [];
+
+    if (expenses && expenses.length > 0) {
+      for (const expItem of expenses) {
+        const paymentMethod = expItem.paymentMethod || 'cash';
+        const amount = parseFloat(String(expItem.amount)) || 0; // Fix NaN issue
+        totalExpenses += amount;
+
+        if (paymentMethod === 'cash') {
+          cashExpenses += amount;
+        }
+
+        expenseRecords.push(
+          this.dailyExpenseRepository.create({
+            category: expItem.category as any,
+            description: expItem.description,
+            amount,
+            paymentMethod: paymentMethod as any,
+          }),
+        );
+      }
+    }
+
+    // Process stock purchases records
+    let totalStockPurchases = 0;
+    const stockPurchaseRecords: StockPurchase[] = [];
+
+    if (stockPurchases && stockPurchases.length > 0) {
+      for (const purchaseItem of stockPurchases) {
+        const quantity = parseFloat(String(purchaseItem.quantity)) || 0;
+        const unitCost = parseFloat(String(purchaseItem.unitCost)) || 0;
+        const totalCost = quantity * unitCost;
         totalStockPurchases += totalCost;
 
         stockPurchaseRecords.push(
           this.stockPurchaseRepository.create({
             productId: purchaseItem.productId,
-            quantity: purchaseItem.quantity,
-            unitCost: purchaseItem.unitCost,
+            quantity,
+            unitCost,
             totalCost,
             paymentMethod: purchaseItem.paymentMethod as any,
             supplier: purchaseItem.supplier,
             notes: purchaseItem.notes,
           }),
         );
-
-        // Update product stock (purchases increase stock)
-        product.currentStock += purchaseItem.quantity;
-        await this.productRepository.save(product);
       }
     }
 
-    // Calculate shortage and net values
+    // FIX: CRITICAL FIX - Correct Cash Calculation
+    const airtelMoney = parseFloat(String(salesData.airtelMoney)) || 0;
+    const mpamba = parseFloat(String(salesData.mpamba)) || 0;
+    const bank = parseFloat(String(salesData.bank)) || 0;
+    const nonCashCollected = airtelMoney + mpamba + bank;
+
+    // FIX: Cash at Hand = Total Sales FROM INVENTORY - Total Expenses - Non-Cash Collections
+    // Bills are "credit sales" - not cash in hand
+    const cashAtHand =
+      totalSalesFromInventory - totalExpenses - nonCashCollected;
+
+    // Total collected = Cash + Other payment methods (NOT including bills)
+    const totalCollected = cashAtHand + nonCashCollected;
+
+    // Shortage = Total Sales - Total Collected
     const shortage = totalSales - totalCollected;
+
+    // Net revenue = Total Sales - Total Expenses
     const netRevenue = totalSales - totalExpenses;
-    const cashAtHand = (salesData.cash || 0) - cashExpenses;
 
     // Create daily sales record
     const dailySales = this.dailySalesRepository.create({
       date: new Date(date),
-      cash: salesData.cash || 0,
-      airtelMoney: salesData.airtelMoney || 0,
-      mpamba: salesData.mpamba || 0,
-      bank: salesData.bank || 0,
+      cash: cashAtHand, // System-calculated cash
+      airtelMoney,
+      mpamba,
+      bank,
       totalCollected,
       totalSales,
-      billsAmount: salesData.billsAmount || 0,
+      billsAmount,
       shortage: shortage > 0 ? shortage : 0,
       totalExpenses,
       cashExpenses,
@@ -191,29 +270,62 @@ export class DailySalesService {
 
     const savedSales = await this.dailySalesRepository.save(dailySales);
 
-    // Save related records
-    if (inventoryRecords.length > 0) {
-      for (const inv of inventoryRecords) {
-        inv.dailySalesId = savedSales.id;
+    // Save related records with proper error handling
+    try {
+      if (inventoryRecords.length > 0) {
+        for (const inv of inventoryRecords) {
+          inv.dailySalesId = savedSales.id;
+        }
+        await this.dailyInventoryRepository.save(inventoryRecords);
       }
-      await this.dailyInventoryRepository.save(inventoryRecords);
-    }
 
-    if (expenseRecords.length > 0) {
-      for (const exp of expenseRecords) {
-        exp.dailySalesId = savedSales.id;
+      if (expenseRecords.length > 0) {
+        for (const exp of expenseRecords) {
+          exp.dailySalesId = savedSales.id;
+        }
+        await this.dailyExpenseRepository.save(expenseRecords);
       }
-      await this.dailyExpenseRepository.save(expenseRecords);
-    }
 
-    if (stockPurchaseRecords.length > 0) {
-      for (const purchase of stockPurchaseRecords) {
-        purchase.dailySalesId = savedSales.id;
+      if (stockPurchaseRecords.length > 0) {
+        for (const purchase of stockPurchaseRecords) {
+          purchase.dailySalesId = savedSales.id;
+        }
+        await this.stockPurchaseRepository.save(stockPurchaseRecords);
       }
-      await this.stockPurchaseRepository.save(stockPurchaseRecords);
+
+      // FIX: Link bills to this daily sales record
+      if (billsForDate.length > 0) {
+        for (const bill of billsForDate) {
+          bill.dailySalesId = savedSales.id;
+        }
+        await this.billRepository.save(billsForDate);
+      }
+    } catch (error) {
+      // Rollback if related records fail
+      await this.dailySalesRepository.remove(savedSales);
+      throw error;
     }
 
     return this.findOne(savedSales.id);
+  }
+
+  // Sequential finalization validation
+  private async validateSequentialFinalization(
+    currentDate: Date,
+  ): Promise<void> {
+    const previousDay = new Date(currentDate);
+    previousDay.setDate(previousDay.getDate() - 1);
+
+    const previousDaySales = await this.dailySalesRepository.findOne({
+      where: { date: previousDay },
+    });
+
+    if (previousDaySales && previousDaySales.status !== 'finalized') {
+      const dateStr = previousDay.toISOString().split('T')[0];
+      throw new BadRequestException(
+        `Previous day (${dateStr}) sales are not finalized. Please finalize it before entering sales for ${currentDate.toISOString().split('T')[0]}.`,
+      );
+    }
   }
 
   async findAll(queryDto: QueryDailySalesDto): Promise<{
@@ -222,10 +334,16 @@ export class DailySalesService {
     page: number;
     limit: number;
   }> {
-    const { startDate, endDate, page = 1, limit = 30 } = queryDto;
+    const { startDate, endDate, status, page = 1, limit = 30 } = queryDto;
 
     const queryBuilder = this.dailySalesRepository
       .createQueryBuilder('dailySales')
+      .leftJoinAndSelect('dailySales.inventories', 'inventories')
+      .leftJoinAndSelect('inventories.product', 'product')
+      .leftJoinAndSelect('dailySales.expenses', 'expenses')
+      .leftJoinAndSelect('dailySales.stockPurchases', 'stockPurchases')
+      .leftJoinAndSelect('dailySales.bills', 'bills')
+      .leftJoinAndSelect('bills.customer', 'customer')
       .orderBy('dailySales.date', 'DESC');
 
     // Date range filter
@@ -242,6 +360,11 @@ export class DailySalesService {
       queryBuilder.where('dailySales.date <= :endDate', {
         endDate: new Date(endDate),
       });
+    }
+
+    // Status filter
+    if (status) {
+      queryBuilder.andWhere('dailySales.status = :status', { status });
     }
 
     // Pagination
@@ -264,10 +387,13 @@ export class DailySalesService {
       relations: [
         'inventories',
         'inventories.product',
+        'inventories.product.category',
         'expenses',
         'stockPurchases',
         'stockPurchases.product',
         'inventoryTransfers',
+        'bills',
+        'bills.customer',
       ],
     });
 
@@ -279,14 +405,21 @@ export class DailySalesService {
   }
 
   async findByDate(date: string): Promise<DailySales> {
+    const targetDate = new Date(date);
+    targetDate.setHours(0, 0, 0, 0);
+
     const dailySales = await this.dailySalesRepository.findOne({
-      where: { date: new Date(date) },
+      where: { date: targetDate },
       relations: [
         'inventories',
         'inventories.product',
+        'inventories.product.category',
         'expenses',
         'stockPurchases',
+        'stockPurchases.product',
         'inventoryTransfers',
+        'bills',
+        'bills.customer',
       ],
     });
 
@@ -306,8 +439,12 @@ export class DailySalesService {
       relations: [
         'inventories',
         'inventories.product',
+        'inventories.product.category',
         'expenses',
         'stockPurchases',
+        'stockPurchases.product',
+        'bills',
+        'bills.customer',
       ],
     });
   }
@@ -318,6 +455,7 @@ export class DailySalesService {
   ): Promise<DailySales> {
     const dailySales = await this.dailySalesRepository.findOne({
       where: { id },
+      relations: ['inventories', 'expenses', 'stockPurchases'],
     });
 
     if (!dailySales) {
@@ -326,15 +464,35 @@ export class DailySalesService {
 
     if (dailySales.status === 'finalized') {
       throw new BadRequestException(
-        'Cannot update finalized daily sales record. Contact admin to unlock.',
+        'Cannot update finalized daily sales record. Admin must unlock it first.',
       );
     }
 
-    // Update will be similar to create but with existing record
-    // For simplicity, you might want to delete and recreate related records
-    // Or implement more granular updates
+    const { inventories, expenses, stockPurchases, ...salesData } =
+      updateDailySalesDto;
 
-    return this.findOne(id);
+    // Delete existing related records
+    if (dailySales.inventories?.length > 0) {
+      await this.dailyInventoryRepository.remove(dailySales.inventories);
+    }
+    if (dailySales.expenses?.length > 0) {
+      await this.dailyExpenseRepository.remove(dailySales.expenses);
+    }
+    if (dailySales.stockPurchases?.length > 0) {
+      await this.stockPurchaseRepository.remove(dailySales.stockPurchases);
+    }
+
+    // Recreate with updated data
+    const dateStr = dailySales.date.toISOString().split('T')[0];
+    await this.dailySalesRepository.remove(dailySales);
+
+    return this.create({
+      date: dateStr,
+      inventories: inventories || [],
+      expenses: expenses || [],
+      stockPurchases: stockPurchases || [],
+      ...salesData,
+    });
   }
 
   async finalize(id: string): Promise<DailySales> {
@@ -392,7 +550,6 @@ export class DailySalesService {
 
     const { fromProductId, toProductId, quantity, notes } = createTransferDto;
 
-    // Get products
     const fromProduct = await this.productRepository.findOne({
       where: { id: fromProductId },
     });
@@ -405,14 +562,12 @@ export class DailySalesService {
       throw new NotFoundException('One or both products not found');
     }
 
-    // Check if fromProduct has shotsPerBottle configured
     if (!fromProduct.shotsPerBottle) {
       throw new BadRequestException(
         `Product ${fromProduct.name} does not have shots per bottle configured`,
       );
     }
 
-    // Check if there's enough stock
     if (fromProduct.currentStock < quantity) {
       throw new BadRequestException(
         `Insufficient stock. Available: ${fromProduct.currentStock}`,
@@ -422,7 +577,6 @@ export class DailySalesService {
     const conversionRate = fromProduct.shotsPerBottle;
     const resultingQuantity = quantity * conversionRate;
 
-    // Create transfer record
     const transfer = this.inventoryTransferRepository.create({
       dailySalesId,
       fromProductId,
@@ -436,7 +590,6 @@ export class DailySalesService {
 
     const savedTransfer = await this.inventoryTransferRepository.save(transfer);
 
-    // Update product stocks
     fromProduct.currentStock -= quantity;
     toProduct.currentStock += resultingQuantity;
 
@@ -535,5 +688,35 @@ export class DailySalesService {
       averageDailySales: sales.length > 0 ? totalSales / sales.length : 0,
       dailyBreakdown: sales,
     };
+  }
+
+  // FIX: Update getBillsForDate to only get bills linked to dailySalesId
+  async getBillsForDate(date: string, dailySalesId?: string): Promise<Bill[]> {
+    const targetDate = new Date(date);
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // If dailySalesId provided, get bills linked to it
+    if (dailySalesId) {
+      return this.billRepository.find({
+        where: {
+          dailySalesId,
+        },
+        relations: ['customer'],
+        order: { createdAt: 'DESC' },
+      });
+    }
+
+    // Otherwise, get unlinked bills for this date
+    return this.billRepository.find({
+      where: {
+        createdAt: Between(startOfDay, endOfDay),
+        dailySalesId: IsNull(), // FIX: Use IsNull() instead of null
+      },
+      relations: ['customer'],
+      order: { createdAt: 'DESC' },
+    });
   }
 }

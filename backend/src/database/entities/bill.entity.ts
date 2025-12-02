@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Customer } from './customer.entity';
+import { DailySales } from './daily-sales.entity';
 
 @Entity('bills')
 export class Bill {
@@ -23,6 +24,9 @@ export class Bill {
   @Column({ type: 'text' })
   description: string;
 
+  @Column({ name: 'daily_sales_id', type: 'uuid', nullable: true })
+  dailySalesId: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
@@ -34,4 +38,10 @@ export class Bill {
   })
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
+
+  @ManyToOne(() => DailySales, (dailySales) => dailySales.bills, {
+    nullable: true,
+  })
+  @JoinColumn({ name: 'daily_sales_id' })
+  dailySales: DailySales;
 }

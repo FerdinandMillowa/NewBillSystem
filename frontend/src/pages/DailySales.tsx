@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dailySalesService } from "../services/daily-sales.service";
 import { productsService } from "../services/products.service";
 import { productCategoriesService } from "../services/product-categories.service";
+import { billsService } from "../services/bills.service";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { DailySalesInventoryGrid } from "../components/daily-sales/DailySalesInventoryGrid";
@@ -10,12 +11,17 @@ import { DailySalesRevenueForm } from "../components/daily-sales/DailySalesReven
 import { DailySalesExpensesForm } from "../components/daily-sales/DailySalesExpensesForm";
 import { DailySalesStockPurchases } from "../components/daily-sales/DailySalesStockPurchases";
 import { DailySalesSummary } from "../components/daily-sales/DailySalesSummary";
+import { DailySalesBillsSection } from "../components/daily-sales/DailySalesBillsSection";
+import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import {
   CalendarIcon,
   CheckCircleIcon,
   DocumentCheckIcon,
   ArrowPathIcon,
+  LockOpenIcon,
+  PencilIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { format } from "date-fns";
 import type {
@@ -25,22 +31,23 @@ import type {
 } from "../types/daily-sales.types";
 
 export const DailySales = () => {
+  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState(
     format(new Date(), "yyyy-MM-dd")
   );
+  const [showPreviousDayWarning, setShowPreviousDayWarning] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   // Form state
   const [inventories, setInventories] = useState<DailyInventoryItem[]>([]);
   const [revenue, setRevenue] = useState({
-    cash: 0,
     airtelMoney: 0,
     mpamba: 0,
     bank: 0,
   });
   const [expenses, setExpenses] = useState<DailyExpenseItem[]>([]);
   const [stockPurchases, setStockPurchases] = useState<StockPurchaseItem[]>([]);
-  const [billsAmount, setBillsAmount] = useState(0);
   const [notes, setNotes] = useState("");
 
   // Fetch categories
@@ -55,7 +62,7 @@ export const DailySales = () => {
     queryFn: () =>
       productsService.getAll({
         isActive: true,
-        limit: 500, // Get all products
+        limit: 500,
       }),
   });
 
@@ -66,6 +73,22 @@ export const DailySales = () => {
     retry: false,
     enabled: !!selectedDate,
   });
+
+  // Fetch bills for selected date
+  const { data: billsForDate } = useQuery({
+    queryKey: ["bills-by-date", selectedDate],
+    queryFn: async () => {
+      const response = await dailySalesService.getBillsForDate(selectedDate);
+      return response || [];
+    },
+    enabled: !!selectedDate,
+  });
+
+  // Calculate total bills amount for the selected date
+  const billsAmount = (billsForDate || []).reduce(
+    (sum: number, bill: any) => sum + parseFloat(bill.amount || 0),
+    0
+  );
 
   // Initialize form with existing data or previous day's closing stock
   useEffect(() => {
@@ -80,14 +103,12 @@ export const DailySales = () => {
         }))
       );
       setRevenue({
-        cash: Number(existingDailySales.cash),
-        airtelMoney: Number(existingDailySales.airtelMoney),
-        mpamba: Number(existingDailySales.mpamba),
-        bank: Number(existingDailySales.bank),
+        airtelMoney: Number(existingDailySales.airtelMoney) || 0,
+        mpamba: Number(existingDailySales.mpamba) || 0,
+        bank: Number(existingDailySales.bank) || 0,
       });
       setExpenses(existingDailySales.expenses || []);
       setStockPurchases(existingDailySales.stockPurchases || []);
-      setBillsAmount(Number(existingDailySales.billsAmount));
       setNotes(existingDailySales.notes || "");
     } else if (productsData?.products) {
       // Initialize with product current stock as opening stock
@@ -98,18 +119,56 @@ export const DailySales = () => {
         closingStock: product.currentStock,
       }));
       setInventories(initialInventories);
-      setRevenue({ cash: 0, airtelMoney: 0, mpamba: 0, bank: 0 });
+      setRevenue({ airtelMoney: 0, mpamba: 0, bank: 0 });
       setExpenses([]);
       setStockPurchases([]);
-      setBillsAmount(0);
       setNotes("");
     }
   }, [existingDailySales, productsData]);
 
-  // Calculate totals
-  const calculateTotals = () => {
-    let totalSales = 0;
+  // Validate stock purchases with stock in
+  const validateStockPurchases = (): { valid: boolean; errors: string[] } => {
+    const errors: string[] = [];
 
+    // Check each inventory item that has stockIn > 0
+    inventories.forEach((inv) => {
+      const stockIn = inv.stockIn || 0;
+
+      if (stockIn > 0) {
+        // Find corresponding stock purchase
+        const purchase = stockPurchases.find(
+          (p) => p.productId === inv.productId
+        );
+
+        if (!purchase || purchase.quantity === 0) {
+          const product = productsData?.products.find(
+            (p) => p.id === inv.productId
+          );
+          errors.push(
+            `Stock In entered for "${product?.name}" but no Stock Purchase recorded.`
+          );
+        } else if (purchase.quantity !== stockIn) {
+          const product = productsData?.products.find(
+            (p) => p.id === inv.productId
+          );
+          errors.push(
+            `Stock In (${stockIn}) doesn't match Stock Purchase (${purchase.quantity}) for "${product?.name}".`
+          );
+        }
+      }
+    });
+
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
+  };
+
+  // Calculate totals with FIXED logic
+  const calculateTotals = () => {
+    let totalSalesFromInventory = 0;
+
+    // Calculate sales from inventory
     if (productsData?.products && inventories.length > 0) {
       inventories.forEach((inv) => {
         const product = productsData.products.find(
@@ -118,35 +177,87 @@ export const DailySales = () => {
         if (product) {
           const soldQuantity =
             inv.openingStock + inv.stockIn - inv.closingStock;
-          totalSales += soldQuantity * product.currentPrice;
+          const revenue = soldQuantity * product.currentPrice;
+          totalSalesFromInventory += revenue;
         }
       });
     }
 
-    const totalCollected =
-      revenue.cash + revenue.airtelMoney + revenue.mpamba + revenue.bank;
+    // **CRITICAL FIX: Bills are CREDIT SALES, not cash**
+    // Total Sales = Inventory Sales + Bills
+    const totalSales = totalSalesFromInventory + billsAmount;
+
+    // Parse revenue to prevent NaN
+    const airtelMoney = parseFloat(String(revenue.airtelMoney)) || 0;
+    const mpamba = parseFloat(String(revenue.mpamba)) || 0;
+    const bank = parseFloat(String(revenue.bank)) || 0;
+    const nonCashCollected = airtelMoney + mpamba + bank;
+
+    // Calculate expenses (prevent NaN)
     const totalExpensesAmount = expenses.reduce(
-      (sum, exp) => sum + exp.amount,
+      (sum, exp) => sum + (parseFloat(String(exp.amount)) || 0),
       0
     );
+
+    // **CRITICAL FIX: Cash at Hand Calculation**
+    // Cash = Inventory Sales (only) - Expenses - Non-Cash Collections
+    // Bills are NOT included in cash because they're credit sales
+    const cashAtHand =
+      totalSalesFromInventory - totalExpensesAmount - nonCashCollected;
+
+    // Total collected = Cash + Other methods (NOT including bills)
+    const totalCollected = cashAtHand + nonCashCollected;
+
+    // **Shortage = Total Sales - Total Collected**
+    // This will equal billsAmount if all cash is accounted for
     const shortage = totalSales - totalCollected;
+
+    // Net revenue = Total Sales - Expenses
+    const netRevenue = totalSales - totalExpensesAmount;
+
+    // Cash expenses only
     const cashExpenses = expenses
       .filter((exp) => exp.paymentMethod === "cash")
-      .reduce((sum, exp) => sum + exp.amount, 0);
-    const netRevenue = totalSales - totalExpensesAmount;
-    const cashAtHand = revenue.cash - cashExpenses;
+      .reduce((sum, exp) => sum + (parseFloat(String(exp.amount)) || 0), 0);
 
     return {
-      totalSales,
-      totalCollected,
+      totalSales, // Inventory + Bills
+      totalCollected, // Cash + Non-Cash (excludes bills)
       totalExpenses: totalExpensesAmount,
-      shortage: shortage > 0 ? shortage : 0,
+      shortage: shortage > 0 ? shortage : 0, // Should equal billsAmount
       netRevenue,
-      cashAtHand,
+      cashAtHand, // Actual cash in drawer
+      cashExpenses,
+      totalSalesFromInventory, // Just inventory sales (excluding bills)
     };
   };
 
   const totals = calculateTotals();
+
+  // Auto-fill stock in from stock purchases
+  useEffect(() => {
+    if (stockPurchases.length > 0) {
+      const updatedInventories = [...inventories];
+
+      stockPurchases.forEach((purchase) => {
+        const invIndex = updatedInventories.findIndex(
+          (inv) => inv.productId === purchase.productId
+        );
+
+        if (invIndex !== -1) {
+          // Only update if stockIn is 0 (user hasn't manually entered)
+          if (updatedInventories[invIndex].stockIn === 0) {
+            updatedInventories[invIndex] = {
+              ...updatedInventories[invIndex],
+              stockIn: purchase.quantity,
+            };
+          }
+        }
+      });
+
+      setInventories(updatedInventories);
+    }
+  }, [stockPurchases]);
 
   // Create/Update mutation
   const saveMutation = useMutation({
@@ -161,12 +272,19 @@ export const DailySales = () => {
       queryClient.invalidateQueries({ queryKey: ["daily-sales-by-date"] });
       queryClient.invalidateQueries({ queryKey: ["daily-sales"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      setValidationErrors([]);
       toast.success("Daily sales saved successfully!");
     },
     onError: (error: any) => {
-      toast.error(
-        error.response?.data?.message || "Failed to save daily sales"
-      );
+      const message =
+        error.response?.data?.message || "Failed to save daily sales";
+
+      // Check for sequential finalization error
+      if (message.includes("not finalized")) {
+        setShowPreviousDayWarning(true);
+      }
+
+      toast.error(message);
     },
   });
 
@@ -185,13 +303,38 @@ export const DailySales = () => {
     },
   });
 
+  // Unlock mutation (admin only)
+  const unlockMutation = useMutation({
+    mutationFn: (id: string) => dailySalesService.unlock(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["daily-sales-by-date"] });
+      queryClient.invalidateQueries({ queryKey: ["daily-sales"] });
+      toast.success("Daily sales unlocked! You can now edit it.");
+    },
+    onError: (error: any) => {
+      toast.error(
+        error.response?.data?.message || "Failed to unlock daily sales"
+      );
+    },
+  });
+
   const handleSaveDraft = () => {
+    // Validate stock purchases
+    const validation = validateStockPurchases();
+    if (!validation.valid) {
+      setValidationErrors(validation.errors);
+      toast.error("Please fix validation errors before saving");
+      return;
+    }
+
+    setValidationErrors([]);
+
     const data = {
       date: selectedDate,
+      cash: totals.cashAtHand, // System-calculated cash
       ...revenue,
       billsAmount,
       inventories: inventories.filter((inv) => {
-        // Only include products that have some activity
         return inv.openingStock > 0 || inv.stockIn > 0 || inv.closingStock > 0;
       }),
       expenses,
@@ -208,12 +351,34 @@ export const DailySales = () => {
       return;
     }
 
+    // Validate before finalizing
+    const validation = validateStockPurchases();
+    if (!validation.valid) {
+      setValidationErrors(validation.errors);
+      toast.error("Please fix validation errors before finalizing");
+      return;
+    }
+
+    setValidationErrors([]);
+
     if (
       window.confirm(
         "Are you sure you want to finalize this daily sales? You won't be able to edit it afterwards without admin approval."
       )
     ) {
       finalizeMutation.mutate(existingDailySales.id);
+    }
+  };
+
+  const handleUnlock = () => {
+    if (!existingDailySales) return;
+
+    if (
+      window.confirm(
+        "Are you sure you want to unlock this finalized daily sales? This will allow editing again."
+      )
+    ) {
+      unlockMutation.mutate(existingDailySales.id);
     }
   };
 
@@ -224,40 +389,120 @@ export const DailySales = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             Daily Sales Entry
           </h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
             Record today's inventory, revenue, and expenses
           </p>
         </div>
         <div className="flex items-center space-x-3">
           {existingDailySales && (
-            <div className="flex items-center space-x-2 px-4 py-2 bg-gray-100 rounded-lg">
-              {isFinalized ? (
+            <>
+              <div className="flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                {isFinalized ? (
+                  <>
+                    <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium text-green-600 dark:text-green-400">
+                      Finalized
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <DocumentCheckIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                    <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">
+                      Draft
+                    </span>
+                  </>
+                )}
+              </div>
+              {isFinalized && isAdmin && (
                 <>
-                  <CheckCircleIcon className="w-5 h-5 text-green-600" />
-                  <span className="text-sm font-medium text-green-600">
-                    Finalized
-                  </span>
-                </>
-              ) : (
-                <>
-                  <DocumentCheckIcon className="w-5 h-5 text-yellow-600" />
-                  <span className="text-sm font-medium text-yellow-600">
-                    Draft
-                  </span>
+                  <Button
+                    variant="secondary"
+                    onClick={handleUnlock}
+                    isLoading={unlockMutation.isPending}
+                    className="flex items-center"
+                  >
+                    <LockOpenIcon className="w-5 h-5 mr-2" />
+                    Unlock
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      unlockMutation.mutate(existingDailySales.id);
+                    }}
+                    className="flex items-center"
+                  >
+                    <PencilIcon className="w-5 h-5 mr-2" />
+                    Edit (Admin)
+                  </Button>
                 </>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>
 
+      {/* Previous Day Warning */}
+      {showPreviousDayWarning && (
+        <Card className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+          <div className="flex items-start">
+            <ExclamationTriangleIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-400 mr-3 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                Previous Day Not Finalized
+              </h3>
+              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                The previous day's sales have not been finalized. Please
+                finalize the previous day before entering sales for this date to
+                maintain sequential data integrity.
+              </p>
+              <button
+                onClick={() => setShowPreviousDayWarning(false)}
+                className="text-sm font-medium text-yellow-800 dark:text-yellow-200 underline mt-2"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Validation Errors */}
+      {validationErrors.length > 0 && (
+        <Card className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+          <div className="flex items-start">
+            <ExclamationTriangleIcon className="w-6 h-6 text-red-600 dark:text-red-400 mr-3 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                Validation Errors
+              </h3>
+              <ul className="mt-2 space-y-1">
+                {validationErrors.map((error, index) => (
+                  <li
+                    key={index}
+                    className="text-sm text-red-700 dark:text-red-300"
+                  >
+                    • {error}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => setValidationErrors([])}
+                className="text-sm font-medium text-red-800 dark:text-red-200 underline mt-2"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Date Selector */}
       <Card>
         <div className="flex items-center space-x-4">
-          <CalendarIcon className="w-5 h-5 text-gray-400" />
+          <CalendarIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
           <div className="flex-1">
             <label className="label">Select Date</label>
             <input
@@ -270,7 +515,7 @@ export const DailySales = () => {
             />
           </div>
           {isLoadingExisting && (
-            <div className="flex items-center space-x-2 text-gray-500">
+            <div className="flex items-center space-x-2 text-gray-500 dark:text-gray-400">
               <ArrowPathIcon className="w-5 h-5 animate-spin" />
               <span className="text-sm">Loading...</span>
             </div>
@@ -278,8 +523,23 @@ export const DailySales = () => {
         </div>
       </Card>
 
+      {/* Bills Section with Inline Bill Creation */}
+      <DailySalesBillsSection
+        selectedDate={selectedDate}
+        billsForDate={billsForDate || []}
+        billsAmount={billsAmount}
+        isDisabled={isFinalized}
+        onBillCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ["bills-by-date"] });
+        }}
+      />
+
       {/* Summary Dashboard */}
-      <DailySalesSummary totals={totals} billsAmount={billsAmount} />
+      <DailySalesSummary
+        totals={totals}
+        billsAmount={billsAmount}
+        totalSalesFromInventory={totals.totalSalesFromInventory}
+      />
 
       {/* Inventory Grid */}
       <DailySalesInventoryGrid
@@ -293,9 +553,8 @@ export const DailySales = () => {
       {/* Revenue Collection */}
       <DailySalesRevenueForm
         revenue={revenue}
-        billsAmount={billsAmount}
+        cashAtHand={totals.cashAtHand}
         onRevenueChange={setRevenue}
-        onBillsAmountChange={setBillsAmount}
         isDisabled={isFinalized}
       />
 
@@ -353,16 +612,19 @@ export const DailySales = () => {
       )}
 
       {isFinalized && (
-        <Card className="bg-green-50 border border-green-200">
+        <Card className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
           <div className="flex items-center">
-            <CheckCircleIcon className="w-6 h-6 text-green-600 mr-3" />
-            <div>
-              <h3 className="text-sm font-medium text-green-800">
+            <CheckCircleIcon className="w-6 h-6 text-green-600 dark:text-green-400 mr-3" />
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-green-800 dark:text-green-200">
                 Daily Sales Finalized
               </h3>
-              <p className="text-sm text-green-700 mt-1">
-                This daily sales record has been finalized and locked. Contact
-                an administrator if you need to make changes.
+              <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                This daily sales record has been finalized and locked.
+                {isAdmin &&
+                  " As an admin, you can unlock it using the button above."}
+                {!isAdmin &&
+                  " Contact an administrator if you need to make changes."}
               </p>
             </div>
           </div>

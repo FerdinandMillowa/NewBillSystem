@@ -47,6 +47,15 @@ export class DailySalesController {
     return this.dailySalesService.getToday();
   }
 
+  // UPDATED: Get bills for a specific date
+  @Get('bills')
+  getBillsForDate(
+    @Query('date') date: string,
+    @Query('dailySalesId') dailySalesId?: string,
+  ) {
+    return this.dailySalesService.getBillsForDate(date, dailySalesId);
+  }
+
   // Get weekly summary
   @Get('summary/weekly')
   getWeeklySummary(@Query('startDate') startDate?: string) {

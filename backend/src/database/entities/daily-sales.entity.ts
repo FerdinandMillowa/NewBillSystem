@@ -11,6 +11,7 @@ import { DailyInventory } from './daily-inventory.entity';
 import { DailyExpense } from './daily-expense.entity';
 import { StockPurchase } from './stock-purchase.entity';
 import { InventoryTransfer } from './inventory-transfer.entity';
+import { Bill } from './bill.entity';
 
 @Entity('daily_sales')
 @Index(['date'], { unique: true })
@@ -45,7 +46,7 @@ export class DailySales {
 
   // ===== SALES CALCULATIONS =====
   @Column({ type: 'decimal', precision: 12, scale: 2, name: 'total_sales' })
-  totalSales: number; // Sum of all inventory sold (revenue from products)
+  totalSales: number; // Sum of all inventory sold (revenue from products) + bills
 
   @Column({
     type: 'decimal',
@@ -122,4 +123,8 @@ export class DailySales {
 
   @OneToMany(() => InventoryTransfer, (transfer) => transfer.dailySales)
   inventoryTransfers: InventoryTransfer[];
+
+  // Add bills relationship
+  @OneToMany(() => Bill, (bill) => bill.dailySales)
+  bills: Bill[];
 }

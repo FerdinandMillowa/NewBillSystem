@@ -1,9 +1,13 @@
+// ===============================================
+// src/components/daily-sales/DailySalesRevenueForm.tsx - FIXED
+// ===============================================
+
 import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
 import { formatCurrency } from "../../utils/formatters";
+import { InformationCircleIcon } from "@heroicons/react/24/outline";
 
 interface Revenue {
-  cash: number;
   airtelMoney: number;
   mpamba: number;
   bank: number;
@@ -11,21 +15,19 @@ interface Revenue {
 
 interface DailySalesRevenueFormProps {
   revenue: Revenue;
-  billsAmount: number;
+  cashAtHand: number; // System-calculated cash
   onRevenueChange: (revenue: Revenue) => void;
-  onBillsAmountChange: (amount: number) => void;
   isDisabled?: boolean;
 }
 
 export const DailySalesRevenueForm = ({
   revenue,
-  billsAmount,
+  cashAtHand,
   onRevenueChange,
-  onBillsAmountChange,
   isDisabled = false,
 }: DailySalesRevenueFormProps) => {
   const totalIncome =
-    revenue.cash + revenue.airtelMoney + revenue.mpamba + revenue.bank;
+    cashAtHand + revenue.airtelMoney + revenue.mpamba + revenue.bank;
 
   const handleChange = (field: keyof Revenue, value: number) => {
     onRevenueChange({
@@ -36,21 +38,32 @@ export const DailySalesRevenueForm = ({
 
   return (
     <Card title="Income Avenue (Revenue Collection)">
+      {/* Info Box */}
+      <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-start">
+          <InformationCircleIcon className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+          <div className="text-sm text-blue-800">
+            <p className="font-medium">Cash at Hand is Auto-Calculated</p>
+            <p className="text-xs mt-1">
+              Cash = Total Sales (including bills) - Total Expenses - (Airtel
+              Money + Mpamba + Bank)
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Cash */}
-        <div>
-          <label className="label">Cash (MK)</label>
-          <Input
-            type="number"
-            min="0"
-            step="0.01"
-            value={revenue.cash}
-            onChange={(e) =>
-              handleChange("cash", parseFloat(e.target.value) || 0)
-            }
-            disabled={isDisabled}
-            placeholder="0.00"
-          />
+        {/* Cash at Hand - Display Only (System Calculated) */}
+        <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+          <label className="label text-green-900 dark:text-green-100">
+            Cash at Hand (Auto)
+          </label>
+          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+            {formatCurrency(cashAtHand)}
+          </p>
+          <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+            System calculated
+          </p>
         </div>
 
         {/* Airtel Money */}
@@ -102,32 +115,51 @@ export const DailySalesRevenueForm = ({
         </div>
 
         {/* Total Income - Display Only */}
-        <div className="bg-primary-50 p-4 rounded-lg">
-          <label className="label text-primary-900">Total Income</label>
-          <p className="text-2xl font-bold text-primary-600">
+        <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg border border-primary-200 dark:border-primary-800">
+          <label className="label text-primary-900 dark:text-primary-100">
+            Total Income
+          </label>
+          <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
             {formatCurrency(totalIncome)}
+          </p>
+          <p className="text-xs text-primary-700 dark:text-primary-300 mt-1">
+            All methods
           </p>
         </div>
       </div>
 
-      {/* Bills Amount - Tracked Separately */}
-      <div className="mt-6 pt-6 border-t border-gray-200">
-        <div className="max-w-xs">
-          <label className="label">Bills Amount (Optional)</label>
-          <Input
-            type="number"
-            min="0"
-            step="0.01"
-            value={billsAmount}
-            onChange={(e) =>
-              onBillsAmountChange(parseFloat(e.target.value) || 0)
-            }
-            disabled={isDisabled}
-            placeholder="0.00"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Track bills created today separately from actual payments
-          </p>
+      {/* Breakdown Display */}
+      <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+        <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+          Income Breakdown
+        </h4>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <p className="text-xs text-gray-600 dark:text-gray-400">Cash</p>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
+              {formatCurrency(cashAtHand)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Airtel Money
+            </p>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
+              {formatCurrency(revenue.airtelMoney)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-600 dark:text-gray-400">Mpamba</p>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
+              {formatCurrency(revenue.mpamba)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-600 dark:text-gray-400">Bank</p>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
+              {formatCurrency(revenue.bank)}
+            </p>
+          </div>
         </div>
       </div>
     </Card>

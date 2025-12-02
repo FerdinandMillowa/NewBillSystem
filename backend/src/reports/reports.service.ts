@@ -1,19 +1,34 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
+import { Repository, Between, MoreThanOrEqual } from 'typeorm';
 import { Customer } from '../database/entities/customer.entity';
 import { Bill } from '../database/entities/bill.entity';
 import { Payment } from '../database/entities/payment.entity';
-import { DateRangeDto } from './dto/date-range.dto';
-import {
-  DailySummary,
-  MonthlySummary,
-  OutstandingBalance,
-  PaymentMethodDistribution,
-  RevenueReport,
-  DashboardStats,
-} from './interfaces/report-response.interface';
+import { DailySales } from '../database/entities/daily-sales.entity';
+import { DailyInventory } from '../database/entities/daily-inventory.entity';
+import { DailyExpense } from '../database/entities/daily-expense.entity';
+import { Product } from '../database/entities/product.entity';
+import { ProductCategory } from '../database/entities/product-category.entity';
 import { CustomerStatus } from '../common/enums';
+import { DateRangeDto } from './dto/date-range.dto';
+import { format, subDays } from 'date-fns';
+
+export interface OutstandingBalance {
+  customerId: string;
+  customerName: string;
+  email: string;
+  phone: string;
+  totalBills: number;
+  totalPayments: number;
+  balance: number;
+}
+
+export interface TopCustomer {
+  id: string;
+  name: string;
+  email: string;
+  totalPaid: number;
+}
 
 @Injectable()
 export class ReportsService {
@@ -24,335 +39,454 @@ export class ReportsService {
     private billRepository: Repository<Bill>,
     @InjectRepository(Payment)
     private paymentRepository: Repository<Payment>,
+    @InjectRepository(DailySales)
+    private dailySalesRepository: Repository<DailySales>,
+    @InjectRepository(DailyInventory)
+    private dailyInventoryRepository: Repository<DailyInventory>,
+    @InjectRepository(DailyExpense)
+    private dailyExpenseRepository: Repository<DailyExpense>,
+    @InjectRepository(Product)
+    private productRepository: Repository<Product>,
+    @InjectRepository(ProductCategory)
+    private productCategoryRepository: Repository<ProductCategory>,
   ) {}
 
-  async getDashboardStats(): Promise<DashboardStats> {
-    // Customer stats
-    const totalCustomers = await this.customerRepository.count();
-    const approvedCustomers = await this.customerRepository.count({
-      where: { status: CustomerStatus.APPROVED },
-    });
-    const pendingCustomers = await this.customerRepository.count({
-      where: { status: CustomerStatus.PENDING },
-    });
+  async getDashboardStats(): Promise<any> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    // Bills stats
-    const totalBills = await this.billRepository.count();
-    const billsAmount = await this.billRepository
-      .createQueryBuilder('bill')
-      .select('COALESCE(SUM(bill.amount), 0)', 'total')
-      .getRawOne();
+    const [
+      totalCustomers,
+      totalActiveCustomers,
+      totalBills,
+      totalBillsAmount,
+      totalPayments,
+      totalPaymentsAmount,
+      todaySales,
+      thisMonthSales,
+    ] = await Promise.all([
+      this.customerRepository.count(),
+      this.customerRepository.count({
+        where: { status: CustomerStatus.APPROVED },
+      }),
+      this.billRepository.count(),
+      this.billRepository
+        .createQueryBuilder('bill')
+        .select('SUM(bill.amount)', 'total')
+        .getRawOne(),
+      this.paymentRepository.count(),
+      this.paymentRepository
+        .createQueryBuilder('payment')
+        .select('SUM(payment.amount)', 'total')
+        .getRawOne(),
+      this.dailySalesRepository.findOne({ where: { date: today } }),
+      this.dailySalesRepository
+        .createQueryBuilder('sales')
+        .select('SUM(sales.total_sales)', 'totalSales')
+        .where('EXTRACT(MONTH FROM sales.date) = :month', {
+          month: today.getMonth() + 1,
+        })
+        .andWhere('EXTRACT(YEAR FROM sales.date) = :year', {
+          year: today.getFullYear(),
+        })
+        .getRawOne(),
+    ]);
 
-    // Payments stats
-    const totalPayments = await this.paymentRepository.count();
-    const paymentsAmount = await this.paymentRepository
-      .createQueryBuilder('payment')
-      .select('COALESCE(SUM(payment.amount), 0)', 'total')
-      .getRawOne();
-
-    const bills = parseFloat(billsAmount?.total || '0');
-    const payments = parseFloat(paymentsAmount?.total || '0');
-    const outstanding = bills - payments;
-    const collectionRate = bills > 0 ? (payments / bills) * 100 : 0;
+    const billsAmount = parseFloat(totalBillsAmount?.total || '0');
+    const paymentsAmount = parseFloat(totalPaymentsAmount?.total || '0');
+    const outstanding = billsAmount - paymentsAmount;
 
     return {
       customers: {
         total: totalCustomers,
-        approved: approvedCustomers,
-        pending: pendingCustomers,
+        approved: totalActiveCustomers,
+        pending: totalCustomers - totalActiveCustomers,
       },
       bills: {
         total: totalBills,
-        amount: bills,
+        amount: billsAmount,
       },
       payments: {
         total: totalPayments,
-        amount: payments,
+        amount: paymentsAmount,
       },
       revenue: {
-        outstanding,
-        collected: payments,
-        collectionRate: parseFloat(collectionRate.toFixed(2)),
+        outstanding: outstanding > 0 ? outstanding : 0,
+        collected: paymentsAmount,
+        collectionRate: billsAmount > 0 ? (paymentsAmount / billsAmount) * 100 : 0,
       },
+      todayTotalSales: todaySales ? parseFloat(todaySales.totalSales?.toString() || '0') : 0,
+      todayTotalCollected: todaySales ? parseFloat(todaySales.totalCollected?.toString() || '0') : 0,
+      thisMonthSales: parseFloat(thisMonthSales?.totalSales || '0'),
     };
   }
 
-  async getDailyReport(dateRangeDto: DateRangeDto): Promise<DailySummary[]> {
-    const { startDate, endDate } = dateRangeDto;
+  async getPaymentMethodDistribution(): Promise<any> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    // Default to last 30 days if no dates provided
-    const end = endDate ? new Date(endDate) : new Date();
-    const start = startDate
-      ? new Date(startDate)
-      : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-    // Get bills by day
-    const billsByDay = await this.billRepository
-      .createQueryBuilder('bill')
-      .select("TO_CHAR(bill.createdAt, 'YYYY-MM-DD')", 'date')
-      .addSelect('COUNT(*)', 'count')
-      .addSelect('COALESCE(SUM(bill.amount), 0)', 'amount')
-      .where('bill.createdAt BETWEEN :start AND :end', { start, end })
-      .groupBy("TO_CHAR(bill.createdAt, 'YYYY-MM-DD')")
-      .orderBy("TO_CHAR(bill.createdAt, 'YYYY-MM-DD')", 'ASC')
-      .getRawMany();
-
-    // Get payments by day
-    const paymentsByDay = await this.paymentRepository
-      .createQueryBuilder('payment')
-      .select("TO_CHAR(payment.createdAt, 'YYYY-MM-DD')", 'date')
-      .addSelect('COUNT(*)', 'count')
-      .addSelect('COALESCE(SUM(payment.amount), 0)', 'amount')
-      .where('payment.createdAt BETWEEN :start AND :end', { start, end })
-      .groupBy("TO_CHAR(payment.createdAt, 'YYYY-MM-DD')")
-      .orderBy("TO_CHAR(payment.createdAt, 'YYYY-MM-DD')", 'ASC')
-      .getRawMany();
-
-    // Merge bills and payments by date
-    const dateMap = new Map<string, DailySummary>();
-
-    billsByDay.forEach((bill) => {
-      dateMap.set(bill.date, {
-        date: bill.date,
-        totalBills: parseInt(bill.count),
-        billsAmount: parseFloat(bill.amount),
-        totalPayments: 0,
-        paymentsAmount: 0,
-        netRevenue: 0,
-      });
+    const todaySales = await this.dailySalesRepository.findOne({
+      where: { date: today },
     });
 
-    paymentsByDay.forEach((payment) => {
-      const existing = dateMap.get(payment.date) || {
-        date: payment.date,
-        totalBills: 0,
-        billsAmount: 0,
-        totalPayments: 0,
-        paymentsAmount: 0,
-        netRevenue: 0,
+    if (!todaySales) {
+      return {
+        cash: 0,
+        airtelMoney: 0,
+        mpamba: 0,
+        bank: 0,
+        total: 0,
+        breakdown: [],
       };
+    }
 
-      existing.totalPayments = parseInt(payment.count);
-      existing.paymentsAmount = parseFloat(payment.amount);
-      dateMap.set(payment.date, existing);
-    });
+    const cash = parseFloat(todaySales.cash?.toString() || '0');
+    const airtelMoney = parseFloat(todaySales.airtelMoney?.toString() || '0');
+    const mpamba = parseFloat(todaySales.mpamba?.toString() || '0');
+    const bank = parseFloat(todaySales.bank?.toString() || '0');
+    const total = cash + airtelMoney + mpamba + bank;
 
-    // Calculate net revenue
-    const result: DailySummary[] = Array.from(dateMap.values()).map((item) => ({
-      ...item,
-      netRevenue: item.paymentsAmount - item.billsAmount,
-    }));
-
-    return result.sort((a, b) => a.date.localeCompare(b.date));
+    return {
+      cash,
+      airtelMoney,
+      mpamba,
+      bank,
+      total,
+      breakdown: [
+        { method: 'cash', name: 'Cash', amount: cash, percentage: total > 0 ? (cash / total) * 100 : 0 },
+        { method: 'airtel_money', name: 'Airtel Money', amount: airtelMoney, percentage: total > 0 ? (airtelMoney / total) * 100 : 0 },
+        { method: 'mpamba', name: 'Mpamba', amount: mpamba, percentage: total > 0 ? (mpamba / total) * 100 : 0 },
+        { method: 'bank', name: 'Bank', amount: bank, percentage: total > 0 ? (bank / total) * 100 : 0 },
+      ].filter((item) => item.amount > 0),
+    };
   }
 
-  async getMonthlyReport(
-    dateRangeDto: DateRangeDto,
-  ): Promise<MonthlySummary[]> {
-    const { startDate, endDate } = dateRangeDto;
+  async getMonthlyReport(dateRangeDto?: DateRangeDto): Promise<any> {
+    let startDate: Date;
+    let endDate: Date;
 
-    // Default to last 12 months if no dates provided
-    const end = endDate ? new Date(endDate) : new Date();
-    const start = startDate
-      ? new Date(startDate)
-      : new Date(end.getTime() - 365 * 24 * 60 * 60 * 1000);
+    if (dateRangeDto?.startDate && dateRangeDto?.endDate) {
+      startDate = new Date(dateRangeDto.startDate);
+      endDate = new Date(dateRangeDto.endDate);
+    } else {
+      // Default to last 6 months
+      endDate = new Date();
+      startDate = subDays(endDate, 180);
+    }
 
-    // Get bills by month
-    const billsByMonth = await this.billRepository
-      .createQueryBuilder('bill')
-      .select("TO_CHAR(bill.createdAt, 'YYYY-MM')", 'month')
-      .addSelect('COUNT(*)', 'count')
-      .addSelect('COALESCE(SUM(bill.amount), 0)', 'amount')
-      .where('bill.createdAt BETWEEN :start AND :end', { start, end })
-      .groupBy("TO_CHAR(bill.createdAt, 'YYYY-MM')")
-      .orderBy("TO_CHAR(bill.createdAt, 'YYYY-MM')", 'ASC')
-      .getRawMany();
-
-    // Get payments by month
-    const paymentsByMonth = await this.paymentRepository
-      .createQueryBuilder('payment')
-      .select("TO_CHAR(payment.createdAt, 'YYYY-MM')", 'month')
-      .addSelect('COUNT(*)', 'count')
-      .addSelect('COALESCE(SUM(payment.amount), 0)', 'amount')
-      .where('payment.createdAt BETWEEN :start AND :end', { start, end })
-      .groupBy("TO_CHAR(payment.createdAt, 'YYYY-MM')")
-      .orderBy("TO_CHAR(payment.createdAt, 'YYYY-MM')", 'ASC')
-      .getRawMany();
-
-    // Merge bills and payments by month
-    const monthMap = new Map<string, MonthlySummary>();
-
-    billsByMonth.forEach((bill) => {
-      monthMap.set(bill.month, {
-        month: bill.month,
-        totalBills: parseInt(bill.count),
-        billsAmount: parseFloat(bill.amount),
-        totalPayments: 0,
-        paymentsAmount: 0,
-        netRevenue: 0,
-      });
+    const sales = await this.dailySalesRepository.find({
+      where: {
+        date: Between(startDate, endDate),
+      },
+      order: { date: 'ASC' },
     });
 
-    paymentsByMonth.forEach((payment) => {
-      const existing = monthMap.get(payment.month) || {
-        month: payment.month,
-        totalBills: 0,
-        billsAmount: 0,
-        totalPayments: 0,
-        paymentsAmount: 0,
-        netRevenue: 0,
-      };
-
-      existing.totalPayments = parseInt(payment.count);
-      existing.paymentsAmount = parseFloat(payment.amount);
-      monthMap.set(payment.month, existing);
+    const monthlySummary: Record<string, any> = {};
+    sales.forEach((s) => {
+      const monthYear = format(s.date, 'yyyy-MM');
+      if (!monthlySummary[monthYear]) {
+        monthlySummary[monthYear] = {
+          month: monthYear,
+          totalSales: 0,
+          totalCollected: 0,
+          totalExpenses: 0,
+          netRevenue: 0,
+          billsAmount: 0,
+          paymentsAmount: 0,
+        };
+      }
+      monthlySummary[monthYear].totalSales += parseFloat(s.totalSales?.toString() || '0');
+      monthlySummary[monthYear].totalCollected += parseFloat(s.totalCollected?.toString() || '0');
+      monthlySummary[monthYear].totalExpenses += parseFloat(s.totalExpenses?.toString() || '0');
+      monthlySummary[monthYear].netRevenue += parseFloat(s.netRevenue?.toString() || '0');
+      monthlySummary[monthYear].billsAmount += parseFloat(s.billsAmount?.toString() || '0');
     });
 
-    // Calculate net revenue
-    const result: MonthlySummary[] = Array.from(monthMap.values()).map(
-      (item) => ({
-        ...item,
-        netRevenue: item.paymentsAmount - item.billsAmount,
-      }),
-    );
-
-    return result.sort((a, b) => a.month.localeCompare(b.month));
+    return Object.values(monthlySummary);
   }
 
   async getOutstandingBalances(): Promise<OutstandingBalance[]> {
-    const result = await this.customerRepository
-      .createQueryBuilder('customer')
-      .leftJoin('customer.bills', 'bill')
-      .leftJoin('customer.payments', 'payment')
-      .select('customer.id', 'customerId')
-      .addSelect(
-        "customer.firstName || ' ' || customer.lastName",
-        'customerName',
-      )
-      .addSelect('customer.email', 'email')
-      .addSelect('customer.phone', 'phone')
-      .addSelect('COALESCE(SUM(bill.amount), 0)', 'totalBills')
-      .addSelect('COALESCE(SUM(payment.amount), 0)', 'totalPayments')
-      .where('customer.status = :status', { status: CustomerStatus.APPROVED })
-      .groupBy('customer.id')
-      .having(
-        'COALESCE(SUM(bill.amount), 0) - COALESCE(SUM(payment.amount), 0) > 0',
-      )
-      .orderBy(
-        'COALESCE(SUM(bill.amount), 0) - COALESCE(SUM(payment.amount), 0)',
-        'DESC',
-      )
-      .getRawMany();
+    const customers = await this.customerRepository.find({
+      where: { status: CustomerStatus.APPROVED },
+      relations: ['bills', 'payments'],
+    });
 
-    return result.map((item) => ({
-      customerId: item.customerId,
-      customerName: item.customerName,
-      email: item.email,
-      phone: item.phone,
-      totalBills: parseFloat(item.totalBills),
-      totalPayments: parseFloat(item.totalPayments),
-      balance: parseFloat(item.totalBills) - parseFloat(item.totalPayments),
+    const balances: OutstandingBalance[] = customers
+      .map((customer) => {
+        const totalBills = customer.bills?.reduce((sum, bill) => sum + parseFloat(bill.amount?.toString() || '0'), 0) || 0;
+        const totalPayments = customer.payments?.reduce((sum, payment) => sum + parseFloat(payment.amount?.toString() || '0'), 0) || 0;
+        const balance = totalBills - totalPayments;
+
+        return {
+          customerId: customer.id,
+          customerName: `${customer.firstName} ${customer.lastName}`,
+          email: customer.email,
+          phone: customer.phone,
+          totalBills,
+          totalPayments,
+          balance,
+        };
+      })
+      .filter((b) => b.balance > 0)
+      .sort((a, b) => b.balance - a.balance);
+
+    return balances;
+  }
+
+  async getTopCustomers(limit = 10): Promise<TopCustomer[]> {
+    const customers = await this.customerRepository.find({
+      relations: ['payments'],
+      take: 100,
+    });
+
+    const topCustomers = customers
+      .map((customer) => {
+        const totalPaid = customer.payments?.reduce((sum, payment) => sum + parseFloat(payment.amount?.toString() || '0'), 0) || 0;
+        return {
+          id: customer.id,
+          name: `${customer.firstName} ${customer.lastName}`,
+          email: customer.email,
+          totalPaid,
+        };
+      })
+      .filter((c) => c.totalPaid > 0)
+      .sort((a, b) => b.totalPaid - a.totalPaid)
+      .slice(0, limit);
+
+    return topCustomers;
+  }
+
+  async getProductPerformance(startDate: string, endDate: string): Promise<any> {
+    const inventories = await this.dailyInventoryRepository.find({
+      where: {
+        dailySales: {
+          date: Between(new Date(startDate), new Date(endDate)),
+        },
+      },
+      relations: ['product', 'product.category', 'dailySales'],
+    });
+
+    const productMap: Record<string, any> = {};
+
+    inventories.forEach((inv) => {
+      const productId = inv.product.id;
+      if (!productMap[productId]) {
+        productMap[productId] = {
+          productId,
+          productName: inv.product.name,
+          categoryName: inv.product.category?.name || 'Uncategorized',
+          totalSold: 0,
+          totalRevenue: 0,
+          count: 0,
+        };
+      }
+      productMap[productId].totalSold += inv.soldQuantity || 0;
+      productMap[productId].totalRevenue += parseFloat(inv.revenue?.toString() || '0');
+      productMap[productId].count++;
+    });
+
+    const topProducts = Object.values(productMap)
+      .map((p: any) => ({
+        ...p,
+        averagePrice: p.totalSold > 0 ? p.totalRevenue / p.totalSold : 0,
+      }))
+      .sort((a: any, b: any) => b.totalRevenue - a.totalRevenue);
+
+    return { topProducts };
+  }
+
+  async getCategorySales(startDate: string, endDate: string): Promise<any> {
+    const inventories = await this.dailyInventoryRepository.find({
+      where: {
+        dailySales: {
+          date: Between(new Date(startDate), new Date(endDate)),
+        },
+      },
+      relations: ['product', 'product.category', 'dailySales'],
+    });
+
+    const categoryMap: Record<string, any> = {};
+
+    inventories.forEach((inv) => {
+      const categoryName = inv.product.category?.name || 'Uncategorized';
+      if (!categoryMap[categoryName]) {
+        categoryMap[categoryName] = {
+          categoryName,
+          totalRevenue: 0,
+        };
+      }
+      categoryMap[categoryName].totalRevenue += parseFloat(inv.revenue?.toString() || '0');
+    });
+
+    const total = Object.values(categoryMap).reduce((sum: number, cat: any) => sum + cat.totalRevenue, 0);
+
+    return Object.values(categoryMap).map((cat: any) => ({
+      ...cat,
+      percentage: total > 0 ? (cat.totalRevenue / total) * 100 : 0,
     }));
   }
 
-  async getPaymentMethodDistribution(): Promise<PaymentMethodDistribution[]> {
-    const result = await this.paymentRepository
-      .createQueryBuilder('payment')
-      .select('payment.paymentMethod', 'method')
-      .addSelect('COUNT(*)', 'count')
-      .addSelect('COALESCE(SUM(payment.amount), 0)', 'amount')
-      .groupBy('payment.paymentMethod')
-      .getRawMany();
+  async getExpenseAnalysis(startDate: string, endDate: string): Promise<any> {
+    const expenses = await this.dailyExpenseRepository.find({
+      where: {
+        dailySales: {
+          date: Between(new Date(startDate), new Date(endDate)),
+        },
+      },
+      relations: ['dailySales'],
+    });
 
-    const total = result.reduce(
-      (sum, item) => sum + parseFloat(item.amount),
-      0,
-    );
+    const categoryMap: Record<string, number> = {};
 
-    return result.map((item) => ({
-      method: item.method,
-      count: parseInt(item.count),
-      amount: parseFloat(item.amount),
-      percentage:
-        total > 0
-          ? parseFloat(((parseFloat(item.amount) / total) * 100).toFixed(2))
-          : 0,
-    }));
-  }
-
-  async getRevenueReport(dateRangeDto: DateRangeDto): Promise<RevenueReport> {
-    const { startDate, endDate } = dateRangeDto;
-
-    let whereCondition = {};
-    let period = 'All Time';
-
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      whereCondition = { createdAt: Between(start, end) };
-      period = `${startDate} to ${endDate}`;
-    } else if (startDate) {
-      const start = new Date(startDate);
-      whereCondition = { createdAt: MoreThanOrEqual(start) };
-      period = `From ${startDate}`;
-    } else if (endDate) {
-      const end = new Date(endDate);
-      whereCondition = { createdAt: LessThanOrEqual(end) };
-      period = `Until ${endDate}`;
-    }
-
-    // Get bills
-    const billsData = await this.billRepository
-      .createQueryBuilder('bill')
-      .select('COUNT(*)', 'count')
-      .addSelect('COALESCE(SUM(bill.amount), 0)', 'amount')
-      .where(whereCondition)
-      .getRawOne();
-
-    // Get payments
-    const paymentsData = await this.paymentRepository
-      .createQueryBuilder('payment')
-      .select('COUNT(*)', 'count')
-      .addSelect('COALESCE(SUM(payment.amount), 0)', 'amount')
-      .where(whereCondition)
-      .getRawOne();
-
-    const billsAmount = parseFloat(billsData?.amount || '0');
-    const paymentsAmount = parseFloat(paymentsData?.amount || '0');
-    const outstanding = billsAmount - paymentsAmount;
-    const collectionRate =
-      billsAmount > 0 ? (paymentsAmount / billsAmount) * 100 : 0;
+    expenses.forEach((exp) => {
+      const category = exp.category || 'other';
+      if (!categoryMap[category]) {
+        categoryMap[category] = 0;
+      }
+      categoryMap[category] += parseFloat(exp.amount?.toString() || '0');
+    });
 
     return {
-      period,
-      totalBills: parseInt(billsData?.count || '0'),
-      billsAmount,
-      totalPayments: parseInt(paymentsData?.count || '0'),
-      paymentsAmount,
-      outstandingAmount: outstanding,
-      collectionRate: parseFloat(collectionRate.toFixed(2)),
+      byCategory: Object.entries(categoryMap).map(([category, amount]) => ({
+        category,
+        amount,
+      })),
     };
   }
 
-  async getTopCustomers(limit: number = 10): Promise<any[]> {
-    const result = await this.customerRepository
-      .createQueryBuilder('customer')
-      .leftJoin('customer.payments', 'payment')
-      .select('customer.id', 'id')
-      .addSelect("customer.firstName || ' ' || customer.lastName", 'name')
-      .addSelect('customer.email', 'email')
-      .addSelect('COALESCE(SUM(payment.amount), 0)', 'totalPaid')
-      .where('customer.status = :status', { status: CustomerStatus.APPROVED })
-      .groupBy('customer.id')
-      .orderBy('COALESCE(SUM(payment.amount), 0)', 'DESC')
-      .limit(limit)
-      .getRawMany();
+  async getDailySalesPaymentMethods(startDate: string, endDate: string): Promise<any> {
+    const sales = await this.dailySalesRepository.find({
+      where: {
+        date: Between(new Date(startDate), new Date(endDate)),
+      },
+    });
 
-    return result.map((item) => ({
-      id: item.id,
-      name: item.name,
-      email: item.email,
-      totalPaid: parseFloat(item.totalPaid),
+    let totalCash = 0;
+    let totalAirtelMoney = 0;
+    let totalMpamba = 0;
+    let totalBank = 0;
+
+    sales.forEach((s) => {
+      totalCash += parseFloat(s.cash?.toString() || '0');
+      totalAirtelMoney += parseFloat(s.airtelMoney?.toString() || '0');
+      totalMpamba += parseFloat(s.mpamba?.toString() || '0');
+      totalBank += parseFloat(s.bank?.toString() || '0');
+    });
+
+    const total = totalCash + totalAirtelMoney + totalMpamba + totalBank;
+
+    return [
+      { method: 'cash', name: 'Cash', amount: totalCash, percentage: total > 0 ? (totalCash / total) * 100 : 0 },
+      { method: 'airtel_money', name: 'Airtel Money', amount: totalAirtelMoney, percentage: total > 0 ? (totalAirtelMoney / total) * 100 : 0 },
+      { method: 'mpamba', name: 'Mpamba', amount: totalMpamba, percentage: total > 0 ? (totalMpamba / total) * 100 : 0 },
+      { method: 'bank', name: 'Bank', amount: totalBank, percentage: total > 0 ? (totalBank / total) * 100 : 0 },
+    ].filter((item) => item.amount > 0);
+  }
+
+  async getShortageTracking(startDate: string, endDate: string): Promise<any> {
+    const sales = await this.dailySalesRepository.find({
+      where: {
+        date: Between(new Date(startDate), new Date(endDate)),
+      },
+      order: { date: 'ASC' },
+    });
+
+    const dailyShortage = sales.map((s) => ({
+      date: format(s.date, 'yyyy-MM-dd'),
+      shortage: parseFloat(s.shortage?.toString() || '0'),
+      totalSales: parseFloat(s.totalSales?.toString() || '0'),
+      totalCollected: parseFloat(s.totalCollected?.toString() || '0'),
+      notes: s.notes,
     }));
+
+    const totalShortage = sales.reduce((sum, s) => sum + parseFloat(s.shortage?.toString() || '0'), 0);
+    const daysWithShortage = sales.filter((s) => parseFloat(s.shortage?.toString() || '0') > 0).length;
+
+    return {
+      dailyShortage,
+      totalShortage,
+      daysWithShortage,
+      totalDays: sales.length,
+      averageShortage: sales.length > 0 ? totalShortage / sales.length : 0,
+    };
+  }
+
+  async getWeeklyComparison(): Promise<any> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const thisWeekStart = new Date(today);
+    thisWeekStart.setDate(today.getDate() - today.getDay());
+
+    const lastWeekEnd = new Date(thisWeekStart);
+    lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
+
+    const lastWeekStart = new Date(lastWeekEnd);
+    lastWeekStart.setDate(lastWeekEnd.getDate() - 6);
+
+    const thisWeek = await this.dailySalesRepository.find({
+      where: {
+        date: MoreThanOrEqual(thisWeekStart),
+      },
+    });
+
+    const lastWeek = await this.dailySalesRepository.find({
+      where: {
+        date: Between(lastWeekStart, lastWeekEnd),
+      },
+    });
+
+    const calculateWeekStats = (sales: DailySales[]) => {
+      return {
+        totalSales: sales.reduce((sum, s) => sum + parseFloat(s.totalSales?.toString() || '0'), 0),
+        totalExpenses: sales.reduce((sum, s) => sum + parseFloat(s.totalExpenses?.toString() || '0'), 0),
+        netRevenue: sales.reduce((sum, s) => sum + parseFloat(s.netRevenue?.toString() || '0'), 0),
+        days: sales.length,
+      };
+    };
+
+    const thisWeekStats = calculateWeekStats(thisWeek);
+    const lastWeekStats = calculateWeekStats(lastWeek);
+
+    return {
+      thisWeek: thisWeekStats,
+      lastWeek: lastWeekStats,
+      comparison: {
+        salesChange: lastWeekStats.totalSales > 0 ? ((thisWeekStats.totalSales - lastWeekStats.totalSales) / lastWeekStats.totalSales) * 100 : 0,
+        expensesChange: lastWeekStats.totalExpenses > 0 ? ((thisWeekStats.totalExpenses - lastWeekStats.totalExpenses) / lastWeekStats.totalExpenses) * 100 : 0,
+        revenueChange: lastWeekStats.netRevenue > 0 ? ((thisWeekStats.netRevenue - lastWeekStats.netRevenue) / lastWeekStats.netRevenue) * 100 : 0,
+      },
+    };
+  }
+
+  async getDailySalesSummary(startDate: string, endDate: string): Promise<any> {
+    const sales = await this.dailySalesRepository.find({
+      where: {
+        date: Between(new Date(startDate), new Date(endDate)),
+      },
+      order: { date: 'ASC' },
+    });
+
+    const totalSales = sales.reduce((sum, s) => sum + parseFloat(s.totalSales?.toString() || '0'), 0);
+    const totalCollected = sales.reduce((sum, s) => sum + parseFloat(s.totalCollected?.toString() || '0'), 0);
+    const totalExpenses = sales.reduce((sum, s) => sum + parseFloat(s.totalExpenses?.toString() || '0'), 0);
+    const totalNetRevenue = sales.reduce((sum, s) => sum + parseFloat(s.netRevenue?.toString() || '0'), 0);
+
+    return {
+      summary: {
+        totalSales,
+        totalCollected,
+        totalExpenses,
+        totalNetRevenue,
+        totalDays: sales.length,
+      },
+      dailyBreakdown: sales.map((s) => ({
+        date: format(s.date, 'yyyy-MM-dd'),
+        totalSales: parseFloat(s.totalSales?.toString() || '0'),
+        totalCollected: parseFloat(s.totalCollected?.toString() || '0'),
+        totalExpenses: parseFloat(s.totalExpenses?.toString() || '0'),
+        netRevenue: parseFloat(s.netRevenue?.toString() || '0'),
+      })),
+    };
   }
 }

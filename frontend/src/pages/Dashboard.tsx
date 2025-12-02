@@ -45,9 +45,14 @@ const COLORS = [
 ];
 
 export const Dashboard = () => {
-  const { data: dashboardData, isLoading: isDashboardLoading } = useQuery({
+  const {
+    data: dashboardData,
+    isLoading: isDashboardLoading,
+    error: dashboardError,
+  } = useQuery({
     queryKey: ["dashboard"],
     queryFn: () => reportsService.getDashboard(),
+    retry: 1,
   });
 
   const { data: pendingCustomers } = useQuery({
@@ -74,6 +79,41 @@ export const Dashboard = () => {
     queryKey: ["payment-methods"],
     queryFn: () => reportsService.getPaymentMethods(),
   });
+
+  if (dashboardError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <div className="text-red-600 mb-4">
+          <svg
+            className="w-12 h-12 mx-auto"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          Failed to Load Dashboard
+        </h3>
+        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+          {(dashboardError as any)?.response?.data?.message ||
+            "Unable to fetch dashboard data"}
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   if (isDashboardLoading) {
     return (
@@ -126,13 +166,15 @@ export const Dashboard = () => {
   const monthlyChartData =
     monthlyData?.map((item: any) => ({
       month: item.month.substring(5), // Get MM from YYYY-MM
-      bills: item.billsAmount,
-      payments: item.paymentsAmount,
+      totalSales: item.totalSales || 0,
+      totalCollected: item.totalCollected || 0,
+      billsAmount: item.billsAmount || 0,
+      paymentsAmount: item.paymentsAmount || 0,
     })) || [];
 
   const paymentMethodChartData =
-    paymentMethods?.map((item: any) => ({
-      name: getPaymentMethodLabel(item.method),
+    paymentMethods?.breakdown?.map((item: any) => ({
+      name: item.name,
       value: item.amount,
       percentage: item.percentage,
     })) || [];
