@@ -113,10 +113,15 @@ export class ReportsService {
       revenue: {
         outstanding: outstanding > 0 ? outstanding : 0,
         collected: paymentsAmount,
-        collectionRate: billsAmount > 0 ? (paymentsAmount / billsAmount) * 100 : 0,
+        collectionRate:
+          billsAmount > 0 ? (paymentsAmount / billsAmount) * 100 : 0,
       },
-      todayTotalSales: todaySales ? parseFloat(todaySales.totalSales?.toString() || '0') : 0,
-      todayTotalCollected: todaySales ? parseFloat(todaySales.totalCollected?.toString() || '0') : 0,
+      todayTotalSales: todaySales
+        ? parseFloat(todaySales.totalSales?.toString() || '0')
+        : 0,
+      todayTotalCollected: todaySales
+        ? parseFloat(todaySales.totalCollected?.toString() || '0')
+        : 0,
       thisMonthSales: parseFloat(thisMonthSales?.totalSales || '0'),
     };
   }
@@ -153,10 +158,30 @@ export class ReportsService {
       bank,
       total,
       breakdown: [
-        { method: 'cash', name: 'Cash', amount: cash, percentage: total > 0 ? (cash / total) * 100 : 0 },
-        { method: 'airtel_money', name: 'Airtel Money', amount: airtelMoney, percentage: total > 0 ? (airtelMoney / total) * 100 : 0 },
-        { method: 'mpamba', name: 'Mpamba', amount: mpamba, percentage: total > 0 ? (mpamba / total) * 100 : 0 },
-        { method: 'bank', name: 'Bank', amount: bank, percentage: total > 0 ? (bank / total) * 100 : 0 },
+        {
+          method: 'cash',
+          name: 'Cash',
+          amount: cash,
+          percentage: total > 0 ? (cash / total) * 100 : 0,
+        },
+        {
+          method: 'airtel_money',
+          name: 'Airtel Money',
+          amount: airtelMoney,
+          percentage: total > 0 ? (airtelMoney / total) * 100 : 0,
+        },
+        {
+          method: 'mpamba',
+          name: 'Mpamba',
+          amount: mpamba,
+          percentage: total > 0 ? (mpamba / total) * 100 : 0,
+        },
+        {
+          method: 'bank',
+          name: 'Bank',
+          amount: bank,
+          percentage: total > 0 ? (bank / total) * 100 : 0,
+        },
       ].filter((item) => item.amount > 0),
     };
   }
@@ -195,11 +220,21 @@ export class ReportsService {
           paymentsAmount: 0,
         };
       }
-      monthlySummary[monthYear].totalSales += parseFloat(s.totalSales?.toString() || '0');
-      monthlySummary[monthYear].totalCollected += parseFloat(s.totalCollected?.toString() || '0');
-      monthlySummary[monthYear].totalExpenses += parseFloat(s.totalExpenses?.toString() || '0');
-      monthlySummary[monthYear].netRevenue += parseFloat(s.netRevenue?.toString() || '0');
-      monthlySummary[monthYear].billsAmount += parseFloat(s.billsAmount?.toString() || '0');
+      monthlySummary[monthYear].totalSales += parseFloat(
+        s.totalSales?.toString() || '0',
+      );
+      monthlySummary[monthYear].totalCollected += parseFloat(
+        s.totalCollected?.toString() || '0',
+      );
+      monthlySummary[monthYear].totalExpenses += parseFloat(
+        s.totalExpenses?.toString() || '0',
+      );
+      monthlySummary[monthYear].netRevenue += parseFloat(
+        s.netRevenue?.toString() || '0',
+      );
+      monthlySummary[monthYear].billsAmount += parseFloat(
+        s.billsAmount?.toString() || '0',
+      );
     });
 
     return Object.values(monthlySummary);
@@ -213,8 +248,17 @@ export class ReportsService {
 
     const balances: OutstandingBalance[] = customers
       .map((customer) => {
-        const totalBills = customer.bills?.reduce((sum, bill) => sum + parseFloat(bill.amount?.toString() || '0'), 0) || 0;
-        const totalPayments = customer.payments?.reduce((sum, payment) => sum + parseFloat(payment.amount?.toString() || '0'), 0) || 0;
+        const totalBills =
+          customer.bills?.reduce(
+            (sum, bill) => sum + parseFloat(bill.amount?.toString() || '0'),
+            0,
+          ) || 0;
+        const totalPayments =
+          customer.payments?.reduce(
+            (sum, payment) =>
+              sum + parseFloat(payment.amount?.toString() || '0'),
+            0,
+          ) || 0;
         const balance = totalBills - totalPayments;
 
         return {
@@ -241,7 +285,12 @@ export class ReportsService {
 
     const topCustomers = customers
       .map((customer) => {
-        const totalPaid = customer.payments?.reduce((sum, payment) => sum + parseFloat(payment.amount?.toString() || '0'), 0) || 0;
+        const totalPaid =
+          customer.payments?.reduce(
+            (sum, payment) =>
+              sum + parseFloat(payment.amount?.toString() || '0'),
+            0,
+          ) || 0;
         return {
           id: customer.id,
           name: `${customer.firstName} ${customer.lastName}`,
@@ -256,11 +305,27 @@ export class ReportsService {
     return topCustomers;
   }
 
-  async getProductPerformance(startDate: string, endDate: string): Promise<any> {
+  async getProductPerformance(
+    startDate?: string,
+    endDate?: string,
+  ): Promise<any> {
+    // FIX: Add default date range if not provided
+    let finalStartDate: Date;
+    let finalEndDate: Date;
+
+    if (startDate && endDate) {
+      finalStartDate = new Date(startDate);
+      finalEndDate = new Date(endDate);
+    } else {
+      // Default to last 30 days
+      finalEndDate = new Date();
+      finalStartDate = subDays(finalEndDate, 30);
+    }
+
     const inventories = await this.dailyInventoryRepository.find({
       where: {
         dailySales: {
-          date: Between(new Date(startDate), new Date(endDate)),
+          date: Between(finalStartDate, finalEndDate),
         },
       },
       relations: ['product', 'product.category', 'dailySales'],
@@ -281,7 +346,9 @@ export class ReportsService {
         };
       }
       productMap[productId].totalSold += inv.soldQuantity || 0;
-      productMap[productId].totalRevenue += parseFloat(inv.revenue?.toString() || '0');
+      productMap[productId].totalRevenue += parseFloat(
+        inv.revenue?.toString() || '0',
+      );
       productMap[productId].count++;
     });
 
@@ -295,11 +362,24 @@ export class ReportsService {
     return { topProducts };
   }
 
-  async getCategorySales(startDate: string, endDate: string): Promise<any> {
+  async getCategorySales(startDate?: string, endDate?: string): Promise<any> {
+    // FIX: Add default date range if not provided
+    let finalStartDate: Date;
+    let finalEndDate: Date;
+
+    if (startDate && endDate) {
+      finalStartDate = new Date(startDate);
+      finalEndDate = new Date(endDate);
+    } else {
+      // Default to last 30 days
+      finalEndDate = new Date();
+      finalStartDate = subDays(finalEndDate, 30);
+    }
+
     const inventories = await this.dailyInventoryRepository.find({
       where: {
         dailySales: {
-          date: Between(new Date(startDate), new Date(endDate)),
+          date: Between(finalStartDate, finalEndDate),
         },
       },
       relations: ['product', 'product.category', 'dailySales'],
@@ -315,10 +395,15 @@ export class ReportsService {
           totalRevenue: 0,
         };
       }
-      categoryMap[categoryName].totalRevenue += parseFloat(inv.revenue?.toString() || '0');
+      categoryMap[categoryName].totalRevenue += parseFloat(
+        inv.revenue?.toString() || '0',
+      );
     });
 
-    const total = Object.values(categoryMap).reduce((sum: number, cat: any) => sum + cat.totalRevenue, 0);
+    const total = Object.values(categoryMap).reduce(
+      (sum: number, cat: any) => sum + cat.totalRevenue,
+      0,
+    );
 
     return Object.values(categoryMap).map((cat: any) => ({
       ...cat,
@@ -326,11 +411,24 @@ export class ReportsService {
     }));
   }
 
-  async getExpenseAnalysis(startDate: string, endDate: string): Promise<any> {
+  async getExpenseAnalysis(startDate?: string, endDate?: string): Promise<any> {
+    // FIX: Add default date range if not provided
+    let finalStartDate: Date;
+    let finalEndDate: Date;
+
+    if (startDate && endDate) {
+      finalStartDate = new Date(startDate);
+      finalEndDate = new Date(endDate);
+    } else {
+      // Default to last 30 days
+      finalEndDate = new Date();
+      finalStartDate = subDays(finalEndDate, 30);
+    }
+
     const expenses = await this.dailyExpenseRepository.find({
       where: {
         dailySales: {
-          date: Between(new Date(startDate), new Date(endDate)),
+          date: Between(finalStartDate, finalEndDate),
         },
       },
       relations: ['dailySales'],
@@ -354,10 +452,26 @@ export class ReportsService {
     };
   }
 
-  async getDailySalesPaymentMethods(startDate: string, endDate: string): Promise<any> {
+  async getDailySalesPaymentMethods(
+    startDate?: string,
+    endDate?: string,
+  ): Promise<any> {
+    // FIX: Add default date range if not provided
+    let finalStartDate: Date;
+    let finalEndDate: Date;
+
+    if (startDate && endDate) {
+      finalStartDate = new Date(startDate);
+      finalEndDate = new Date(endDate);
+    } else {
+      // Default to last 30 days
+      finalEndDate = new Date();
+      finalStartDate = subDays(finalEndDate, 30);
+    }
+
     const sales = await this.dailySalesRepository.find({
       where: {
-        date: Between(new Date(startDate), new Date(endDate)),
+        date: Between(finalStartDate, finalEndDate),
       },
     });
 
@@ -376,17 +490,53 @@ export class ReportsService {
     const total = totalCash + totalAirtelMoney + totalMpamba + totalBank;
 
     return [
-      { method: 'cash', name: 'Cash', amount: totalCash, percentage: total > 0 ? (totalCash / total) * 100 : 0 },
-      { method: 'airtel_money', name: 'Airtel Money', amount: totalAirtelMoney, percentage: total > 0 ? (totalAirtelMoney / total) * 100 : 0 },
-      { method: 'mpamba', name: 'Mpamba', amount: totalMpamba, percentage: total > 0 ? (totalMpamba / total) * 100 : 0 },
-      { method: 'bank', name: 'Bank', amount: totalBank, percentage: total > 0 ? (totalBank / total) * 100 : 0 },
+      {
+        method: 'cash',
+        name: 'Cash',
+        amount: totalCash,
+        percentage: total > 0 ? (totalCash / total) * 100 : 0,
+      },
+      {
+        method: 'airtel_money',
+        name: 'Airtel Money',
+        amount: totalAirtelMoney,
+        percentage: total > 0 ? (totalAirtelMoney / total) * 100 : 0,
+      },
+      {
+        method: 'mpamba',
+        name: 'Mpamba',
+        amount: totalMpamba,
+        percentage: total > 0 ? (totalMpamba / total) * 100 : 0,
+      },
+      {
+        method: 'bank',
+        name: 'Bank',
+        amount: totalBank,
+        percentage: total > 0 ? (totalBank / total) * 100 : 0,
+      },
     ].filter((item) => item.amount > 0);
   }
 
-  async getShortageTracking(startDate: string, endDate: string): Promise<any> {
+  async getShortageTracking(
+    startDate?: string,
+    endDate?: string,
+  ): Promise<any> {
+    // FIX: Add default date range if not provided
+    let finalStartDate: Date;
+    let finalEndDate: Date;
+
+    if (startDate && endDate) {
+      finalStartDate = new Date(startDate);
+      finalEndDate = new Date(endDate);
+    } else {
+      // Default to last 30 days
+      finalEndDate = new Date();
+      finalStartDate = subDays(finalEndDate, 30);
+    }
+
     const sales = await this.dailySalesRepository.find({
       where: {
-        date: Between(new Date(startDate), new Date(endDate)),
+        date: Between(finalStartDate, finalEndDate),
       },
       order: { date: 'ASC' },
     });
@@ -399,8 +549,13 @@ export class ReportsService {
       notes: s.notes,
     }));
 
-    const totalShortage = sales.reduce((sum, s) => sum + parseFloat(s.shortage?.toString() || '0'), 0);
-    const daysWithShortage = sales.filter((s) => parseFloat(s.shortage?.toString() || '0') > 0).length;
+    const totalShortage = sales.reduce(
+      (sum, s) => sum + parseFloat(s.shortage?.toString() || '0'),
+      0,
+    );
+    const daysWithShortage = sales.filter(
+      (s) => parseFloat(s.shortage?.toString() || '0') > 0,
+    ).length;
 
     return {
       dailyShortage,
@@ -438,9 +593,18 @@ export class ReportsService {
 
     const calculateWeekStats = (sales: DailySales[]) => {
       return {
-        totalSales: sales.reduce((sum, s) => sum + parseFloat(s.totalSales?.toString() || '0'), 0),
-        totalExpenses: sales.reduce((sum, s) => sum + parseFloat(s.totalExpenses?.toString() || '0'), 0),
-        netRevenue: sales.reduce((sum, s) => sum + parseFloat(s.netRevenue?.toString() || '0'), 0),
+        totalSales: sales.reduce(
+          (sum, s) => sum + parseFloat(s.totalSales?.toString() || '0'),
+          0,
+        ),
+        totalExpenses: sales.reduce(
+          (sum, s) => sum + parseFloat(s.totalExpenses?.toString() || '0'),
+          0,
+        ),
+        netRevenue: sales.reduce(
+          (sum, s) => sum + parseFloat(s.netRevenue?.toString() || '0'),
+          0,
+        ),
         days: sales.length,
       };
     };
@@ -452,25 +616,68 @@ export class ReportsService {
       thisWeek: thisWeekStats,
       lastWeek: lastWeekStats,
       comparison: {
-        salesChange: lastWeekStats.totalSales > 0 ? ((thisWeekStats.totalSales - lastWeekStats.totalSales) / lastWeekStats.totalSales) * 100 : 0,
-        expensesChange: lastWeekStats.totalExpenses > 0 ? ((thisWeekStats.totalExpenses - lastWeekStats.totalExpenses) / lastWeekStats.totalExpenses) * 100 : 0,
-        revenueChange: lastWeekStats.netRevenue > 0 ? ((thisWeekStats.netRevenue - lastWeekStats.netRevenue) / lastWeekStats.netRevenue) * 100 : 0,
+        salesChange:
+          lastWeekStats.totalSales > 0
+            ? ((thisWeekStats.totalSales - lastWeekStats.totalSales) /
+                lastWeekStats.totalSales) *
+              100
+            : 0,
+        expensesChange:
+          lastWeekStats.totalExpenses > 0
+            ? ((thisWeekStats.totalExpenses - lastWeekStats.totalExpenses) /
+                lastWeekStats.totalExpenses) *
+              100
+            : 0,
+        revenueChange:
+          lastWeekStats.netRevenue > 0
+            ? ((thisWeekStats.netRevenue - lastWeekStats.netRevenue) /
+                lastWeekStats.netRevenue) *
+              100
+            : 0,
       },
     };
   }
 
-  async getDailySalesSummary(startDate: string, endDate: string): Promise<any> {
+  async getDailySalesSummary(
+    startDate?: string,
+    endDate?: string,
+  ): Promise<any> {
+    // FIX: Add default date range if not provided
+    let finalStartDate: Date;
+    let finalEndDate: Date;
+
+    if (startDate && endDate) {
+      finalStartDate = new Date(startDate);
+      finalEndDate = new Date(endDate);
+    } else {
+      // Default to last 7 days
+      finalEndDate = new Date();
+      finalStartDate = subDays(finalEndDate, 7);
+    }
+
     const sales = await this.dailySalesRepository.find({
       where: {
-        date: Between(new Date(startDate), new Date(endDate)),
+        date: Between(finalStartDate, finalEndDate),
       },
       order: { date: 'ASC' },
     });
 
-    const totalSales = sales.reduce((sum, s) => sum + parseFloat(s.totalSales?.toString() || '0'), 0);
-    const totalCollected = sales.reduce((sum, s) => sum + parseFloat(s.totalCollected?.toString() || '0'), 0);
-    const totalExpenses = sales.reduce((sum, s) => sum + parseFloat(s.totalExpenses?.toString() || '0'), 0);
-    const totalNetRevenue = sales.reduce((sum, s) => sum + parseFloat(s.netRevenue?.toString() || '0'), 0);
+    const totalSales = sales.reduce(
+      (sum, s) => sum + parseFloat(s.totalSales?.toString() || '0'),
+      0,
+    );
+    const totalCollected = sales.reduce(
+      (sum, s) => sum + parseFloat(s.totalCollected?.toString() || '0'),
+      0,
+    );
+    const totalExpenses = sales.reduce(
+      (sum, s) => sum + parseFloat(s.totalExpenses?.toString() || '0'),
+      0,
+    );
+    const totalNetRevenue = sales.reduce(
+      (sum, s) => sum + parseFloat(s.netRevenue?.toString() || '0'),
+      0,
+    );
 
     return {
       summary: {

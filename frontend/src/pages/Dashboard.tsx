@@ -18,6 +18,8 @@ import {
   CurrencyDollarIcon,
   ArrowTrendingUpIcon,
   ExclamationTriangleIcon,
+  ShoppingBagIcon,
+  ChartBarIcon,
 } from "@heroicons/react/24/outline";
 import {
   LineChart,
@@ -70,6 +72,7 @@ export const Dashboard = () => {
     queryFn: () => paymentsService.getRecent(5),
   });
 
+  // FIX APPLIED IN reports.service.ts: This call now defaults to a valid date range.
   const { data: monthlyData } = useQuery({
     queryKey: ["monthly-report"],
     queryFn: () => reportsService.getMonthly(),
@@ -78,6 +81,13 @@ export const Dashboard = () => {
   const { data: paymentMethods } = useQuery({
     queryKey: ["payment-methods"],
     queryFn: () => reportsService.getPaymentMethods(),
+  });
+
+  // NEW: Daily Operations queries
+  // FIX APPLIED IN reports.service.ts: This call now defaults to a valid date range.
+  const { data: dailySalesSummary } = useQuery({
+    queryKey: ["daily-sales-summary"],
+    queryFn: () => reportsService.getDailySalesSummary(),
   });
 
   if (dashboardError) {
@@ -123,7 +133,8 @@ export const Dashboard = () => {
     );
   }
 
-  const stats = [
+  // Customer Billing Module Stats
+  const billingStats = [
     {
       name: "Total Customers",
       value: dashboardData?.customers?.total || 0,
@@ -162,7 +173,49 @@ export const Dashboard = () => {
     },
   ];
 
-  // Prepare chart data
+  // Daily Operations Module Stats
+  const operationsStats = [
+    {
+      name: "Today's Sales",
+      value: formatCurrency(dailySalesSummary?.summary?.totalSales || 0),
+      icon: ShoppingBagIcon,
+      color: "bg-indigo-500",
+      subtext: `${
+        dailySalesSummary?.summary?.totalTransactions || 0
+      } transactions`,
+      change: "+18%",
+      changeType: "positive",
+    },
+    {
+      name: "Today's Revenue",
+      value: formatCurrency(dailySalesSummary?.summary?.totalCollected || 0),
+      icon: CurrencyDollarIcon,
+      color: "bg-emerald-500",
+      subtext: `${dailySalesSummary?.summary?.totalNetRevenue || 0} net`,
+      change: "+22%",
+      changeType: "positive",
+    },
+    {
+      name: "Today's Expenses",
+      value: formatCurrency(dailySalesSummary?.summary?.totalExpenses || 0),
+      icon: ChartBarIcon,
+      color: "bg-amber-500",
+      subtext: "Operating costs",
+      change: "+5%",
+      changeType: "negative",
+    },
+    {
+      name: "Collection Rate",
+      value: `${dashboardData?.revenue?.collectionRate?.toFixed(1) || 0}%`,
+      icon: CreditCardIcon,
+      color: "bg-cyan-500",
+      subtext: "Daily target: 95%",
+      change: "+3%",
+      changeType: "positive",
+    },
+  ];
+
+  // Prepare chart data for Customer Billing Module
   const monthlyChartData =
     monthlyData?.map((item: any) => ({
       month: item.month.substring(5), // Get MM from YYYY-MM
@@ -223,238 +276,313 @@ export const Dashboard = () => {
         </Card>
       )}
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
-          <Card
-            key={stat.name}
-            className="relative overflow-hidden hover:shadow-lg transition-shadow"
+      {/* Module Sections */}
+
+      {/* Customer Billing Module */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-gray-900">
+            Customer Billing Module
+          </h2>
+          <Link
+            to="/reports?tab=billing"
+            className="text-sm text-primary-600 hover:text-primary-700"
           >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-600">{stat.name}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-2">
-                  {stat.value}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">{stat.subtext}</p>
+            View detailed reports →
+          </Link>
+        </div>
+
+        {/* Billing Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {billingStats.map((stat) => (
+            <Card
+              key={stat.name}
+              className="relative overflow-hidden hover:shadow-lg transition-shadow"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">{stat.name}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-2">
+                    {stat.value}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">{stat.subtext}</p>
+                </div>
+                <div className={`p-3 rounded-lg ${stat.color}`}>
+                  <stat.icon className="w-6 h-6 text-white" />
+                </div>
               </div>
-              <div className={`p-3 rounded-lg ${stat.color}`}>
-                <stat.icon className="w-6 h-6 text-white" />
+              <div className="mt-4 flex items-center">
+                <span
+                  className={`text-sm font-medium ${
+                    stat.changeType === "positive"
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {stat.change}
+                </span>
+                <span className="text-xs text-gray-500 ml-2">
+                  vs last month
+                </span>
               </div>
-            </div>
-            <div className="mt-4 flex items-center">
-              <span
-                className={`text-sm font-medium ${
-                  stat.changeType === "positive"
-                    ? "text-green-600"
-                    : "text-red-600"
-                }`}
+            </Card>
+          ))}
+        </div>
+
+        {/* Billing Charts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Monthly Trend Chart */}
+          <Card title="Revenue Trend (Last 6 Months)">
+            {monthlyChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={monthlyChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip
+                    formatter={(value: any) => formatCurrency(value)}
+                    labelStyle={{ color: "#000" }}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="totalSales"
+                    stroke="#8b5cf6"
+                    strokeWidth={2}
+                    name="Total Sales"
+                    dot={{ r: 4, fill: "#8b5cf6" }}
+                    activeDot={{ r: 6 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="totalCollected"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    name="Collected"
+                    dot={{ r: 4, fill: "#10b981" }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-gray-500">
+                No billing data available
+              </div>
+            )}
+          </Card>
+
+          {/* Payment Methods Chart */}
+          <Card title="Payment Methods Distribution">
+            {paymentMethodChartData && paymentMethodChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={paymentMethodChartData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(entry) =>
+                      `${entry.name}: ${entry.percentage?.toFixed(1) || 0}%`
+                    }
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {paymentMethodChartData.map((entry: any, index: number) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: any) => formatCurrency(value)} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-gray-500">
+                No payment data available
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Recent Activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recent Bills */}
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Recent Bills</h3>
+              <Link
+                to="/bills"
+                className="text-sm text-primary-600 hover:text-primary-700"
               >
-                {stat.change}
-              </span>
-              <span className="text-xs text-gray-500 ml-2">vs last month</span>
+                View all →
+              </Link>
+            </div>
+            <div className="space-y-3">
+              {recentBills && recentBills.length > 0 ? (
+                recentBills.map((bill: any) => (
+                  <div
+                    key={bill.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        {formatCustomerName(
+                          bill.customer.firstName,
+                          bill.customer.lastName
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {bill.description}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {formatDate(bill.createdAt)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-gray-900">
+                        {formatCurrency(bill.amount)}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-8">
+                  No recent bills
+                </p>
+              )}
             </div>
           </Card>
-        ))}
-      </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Monthly Trend Chart */}
-        <Card title="Revenue Trend (Last 6 Months)">
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={monthlyChartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip
-                formatter={(value: any) => formatCurrency(value)}
-                labelStyle={{ color: "#000" }}
-              />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="totalSales"
-                stroke="#8b5cf6"
-                strokeWidth={2}
-                name="Total Sales"
-                dot={{ r: 4, fill: "#8b5cf6" }}
-                activeDot={{ r: 6 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="totalCollected"
-                stroke="#10b981"
-                strokeWidth={2}
-                name="Collected"
-                dot={{ r: 4, fill: "#10b981" }}
-                activeDot={{ r: 6 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-
-        {/* Payment Methods Chart */}
-        <Card title="Payment Methods Distribution">
-          {paymentMethodChartData && paymentMethodChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={paymentMethodChartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry) =>
-                    `${entry.name}: ${entry.percentage?.toFixed(1) || 0}%`
-                  }
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {paymentMethodChartData.map((entry: any, index: number) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: any) => formatCurrency(value)} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-[300px] text-gray-500">
-              No payment data available
+          {/* Recent Payments */}
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Recent Payments</h3>
+              <Link
+                to="/payments"
+                className="text-sm text-primary-600 hover:text-primary-700"
+              >
+                View all →
+              </Link>
             </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Bills */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Recent Bills</h3>
-            <Link
-              to="/bills"
-              className="text-sm text-primary-600 hover:text-primary-700"
-            >
-              View all →
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {recentBills && recentBills.length > 0 ? (
-              recentBills.map((bill: any) => (
-                <div
-                  key={bill.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">
-                      {formatCustomerName(
-                        bill.customer.firstName,
-                        bill.customer.lastName
-                      )}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {bill.description}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {formatDate(bill.createdAt)}
-                    </p>
+            <div className="space-y-3">
+              {recentPayments && recentPayments.length > 0 ? (
+                recentPayments.map((payment: any) => (
+                  <div
+                    key={payment.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        {formatCustomerName(
+                          payment.customer.firstName,
+                          payment.customer.lastName
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        via {getPaymentMethodLabel(payment.paymentMethod)}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {formatDate(payment.createdAt)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-green-600">
+                        {formatCurrency(payment.amount)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-gray-900">
-                      {formatCurrency(bill.amount)}
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-gray-500 text-center py-8">
-                No recent bills
-              </p>
-            )}
-          </div>
-        </Card>
-
-        {/* Recent Payments */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Recent Payments</h3>
-            <Link
-              to="/payments"
-              className="text-sm text-primary-600 hover:text-primary-700"
-            >
-              View all →
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {recentPayments && recentPayments.length > 0 ? (
-              recentPayments.map((payment: any) => (
-                <div
-                  key={payment.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">
-                      {formatCustomerName(
-                        payment.customer.firstName,
-                        payment.customer.lastName
-                      )}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      via {getPaymentMethodLabel(payment.paymentMethod)}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {formatDate(payment.createdAt)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-green-600">
-                      {formatCurrency(payment.amount)}
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-gray-500 text-center py-8">
-                No recent payments
-              </p>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      {/* Quick Stats Bar */}
-      <Card>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="text-center">
-            <p className="text-3xl font-bold text-primary-600">
-              {dashboardData?.revenue?.collectionRate?.toFixed(1) || 0}%
-            </p>
-            <p className="text-sm text-gray-600 mt-1">Collection Rate</p>
-          </div>
-          <div className="text-center">
-            <p className="text-3xl font-bold text-green-600">
-              {dashboardData?.customers?.approved || 0}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">Active Customers</p>
-          </div>
-          <div className="text-center">
-            <p className="text-3xl font-bold text-purple-600">
-              {dashboardData?.bills?.total || 0}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">Total Bills</p>
-          </div>
-          <div className="text-center">
-            <p className="text-3xl font-bold text-blue-600">
-              {dashboardData?.payments?.total || 0}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">Total Payments</p>
-          </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-8">
+                  No recent payments
+                </p>
+              )}
+            </div>
+          </Card>
         </div>
-      </Card>
+      </div>
+
+      {/* Daily Operations Module */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-gray-900">
+            Daily Operations Module
+          </h2>
+          <Link
+            to="/reports?tab=operations"
+            className="text-sm text-primary-600 hover:text-primary-700"
+          >
+            View detailed reports →
+          </Link>
+        </div>
+
+        {/* Operations Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {operationsStats.map((stat) => (
+            <Card
+              key={stat.name}
+              className="relative overflow-hidden hover:shadow-lg transition-shadow"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">{stat.name}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-2">
+                    {stat.value}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">{stat.subtext}</p>
+                </div>
+                <div className={`p-3 rounded-lg ${stat.color}`}>
+                  <stat.icon className="w-6 h-6 text-white" />
+                </div>
+              </div>
+              <div className="mt-4 flex items-center">
+                <span
+                  className={`text-sm font-medium ${
+                    stat.changeType === "positive"
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {stat.change}
+                </span>
+                <span className="text-xs text-gray-500 ml-2">vs yesterday</span>
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        {/* Quick Stats Bar */}
+        <Card>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-primary-600">
+                {dashboardData?.revenue?.collectionRate?.toFixed(1) || 0}%
+              </p>
+              <p className="text-sm text-gray-600 mt-1">Collection Rate</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-bold text-green-600">
+                {dashboardData?.customers?.approved || 0}
+              </p>
+              <p className="text-sm text-gray-600 mt-1">Active Customers</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-bold text-purple-600">
+                {dashboardData?.bills?.total || 0}
+              </p>
+              <p className="text-sm text-gray-600 mt-1">Total Bills</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-bold text-blue-600">
+                {dashboardData?.payments?.total || 0}
+              </p>
+              <p className="text-sm text-gray-600 mt-1">Total Payments</p>
+            </div>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };

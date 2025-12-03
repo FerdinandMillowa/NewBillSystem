@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { reportsService } from "../services/reports.service";
 import { Card } from "../components/ui/Card";
@@ -10,6 +10,9 @@ import {
   DocumentTextIcon,
   ArrowDownTrayIcon,
   CalendarIcon,
+  UsersIcon,
+  ShoppingBagIcon,
+  CreditCardIcon,
 } from "@heroicons/react/24/outline";
 import {
   LineChart,
@@ -27,6 +30,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { format, subDays, subMonths } from "date-fns";
+import { useSearchParams } from "react-router-dom";
 
 const COLORS = [
   "#3b82f6",
@@ -38,29 +42,39 @@ const COLORS = [
 ];
 
 export const Reports = () => {
-  const [activeTab, setActiveTab] = useState("overview");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") || "billing";
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [dateRange, setDateRange] = useState({
     startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
     endDate: format(new Date(), "yyyy-MM-dd"),
   });
 
-  // Existing reports queries
-  const { data: dashboardData } = useQuery({
-    queryKey: ["dashboard"],
+  // Update URL when tab changes
+  useEffect(() => {
+    setSearchParams({ tab: activeTab });
+  }, [activeTab, setSearchParams]);
+
+  // Customer Billing Module queries
+  const { data: billingDashboardData } = useQuery({
+    queryKey: ["billing-dashboard"],
     queryFn: () => reportsService.getDashboard(),
+    enabled: activeTab === "billing",
   });
 
-  const { data: monthlyData } = useQuery({
-    queryKey: ["monthly-report", dateRange],
+  const { data: billingMonthlyData } = useQuery({
+    queryKey: ["billing-monthly-report", dateRange],
     queryFn: () => reportsService.getMonthly(dateRange),
+    enabled: activeTab === "billing",
   });
 
-  const { data: paymentMethods } = useQuery({
-    queryKey: ["payment-methods"],
+  const { data: billingPaymentMethods } = useQuery({
+    queryKey: ["billing-payment-methods"],
     queryFn: () => reportsService.getPaymentMethods(),
+    enabled: activeTab === "billing",
   });
 
-  // NEW: Daily Sales Analytics queries
+  // Daily Operations Module queries
   const { data: dailySalesSummary } = useQuery({
     queryKey: ["daily-sales-summary", dateRange],
     queryFn: () =>
@@ -68,7 +82,7 @@ export const Reports = () => {
         dateRange.startDate,
         dateRange.endDate
       ),
-    enabled: activeTab === "daily-sales",
+    enabled: activeTab === "operations",
   });
 
   const { data: productPerformance } = useQuery({
@@ -78,31 +92,31 @@ export const Reports = () => {
         dateRange.startDate,
         dateRange.endDate
       ),
-    enabled: activeTab === "daily-sales",
+    enabled: activeTab === "operations",
   });
 
   const { data: categorySales } = useQuery({
     queryKey: ["category-sales", dateRange],
     queryFn: () =>
       reportsService.getCategorySales(dateRange.startDate, dateRange.endDate),
-    enabled: activeTab === "daily-sales",
+    enabled: activeTab === "operations",
   });
 
   const { data: expenseAnalysis } = useQuery({
     queryKey: ["expense-analysis", dateRange],
     queryFn: () =>
       reportsService.getExpenseAnalysis(dateRange.startDate, dateRange.endDate),
-    enabled: activeTab === "daily-sales",
+    enabled: activeTab === "operations",
   });
 
-  const { data: dailySalesPaymentMethods } = useQuery({
-    queryKey: ["daily-sales-payment-methods", dateRange],
+  const { data: operationsPaymentMethods } = useQuery({
+    queryKey: ["operations-payment-methods", dateRange],
     queryFn: () =>
       reportsService.getDailySalesPaymentMethods(
         dateRange.startDate,
         dateRange.endDate
       ),
-    enabled: activeTab === "daily-sales",
+    enabled: activeTab === "operations",
   });
 
   const { data: shortageTracking } = useQuery({
@@ -112,21 +126,27 @@ export const Reports = () => {
         dateRange.startDate,
         dateRange.endDate
       ),
-    enabled: activeTab === "daily-sales",
+    enabled: activeTab === "operations",
   });
 
   const { data: weeklyComparison } = useQuery({
     queryKey: ["weekly-comparison"],
     queryFn: () => reportsService.getWeeklyComparison(),
-    enabled: activeTab === "daily-sales",
+    enabled: activeTab === "operations",
   });
 
   const tabs = [
-    { id: "overview", name: "Overview", icon: ChartBarIcon },
     {
-      id: "daily-sales",
-      name: "Daily Sales Analytics",
-      icon: DocumentTextIcon,
+      id: "billing",
+      name: "Customer Billing",
+      icon: CreditCardIcon,
+      description: "Bills, Payments & Customer Analytics",
+    },
+    {
+      id: "operations",
+      name: "Daily Operations",
+      icon: ShoppingBagIcon,
+      description: "Sales, Products & Inventory Analytics",
     },
   ];
 
@@ -148,8 +168,170 @@ export const Reports = () => {
     setDateRange((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Render Daily Sales Analytics Tab
-  const renderDailySalesTab = () => (
+  // Render Customer Billing Tab
+  const renderBillingTab = () => (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Customers</p>
+              <p className="text-2xl font-bold text-gray-900 mt-2">
+                {billingDashboardData?.customers?.total || 0}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {billingDashboardData?.customers?.approved || 0} approved
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-blue-500">
+              <UsersIcon className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Bills</p>
+              <p className="text-2xl font-bold text-gray-900 mt-2">
+                {formatCurrency(billingDashboardData?.bills?.amount || 0)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {billingDashboardData?.bills?.total || 0} bills
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-purple-500">
+              <DocumentTextIcon className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Collected</p>
+              <p className="text-2xl font-bold text-green-600 mt-2">
+                {formatCurrency(billingDashboardData?.payments?.amount || 0)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {billingDashboardData?.payments?.total || 0} payments
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-green-500">
+              <CurrencyDollarIcon className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Outstanding</p>
+              <p className="text-2xl font-bold text-red-600 mt-2">
+                {formatCurrency(
+                  billingDashboardData?.revenue?.outstanding || 0
+                )}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {billingDashboardData?.revenue?.collectionRate?.toFixed(1) || 0}
+                % collected
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-red-500">
+              <CreditCardIcon className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Monthly Trend Chart */}
+        <Card title="Revenue Trend">
+          {billingMonthlyData && billingMonthlyData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={billingMonthlyData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip
+                  formatter={(value: any) => formatCurrency(value)}
+                  contentStyle={{
+                    backgroundColor: "rgba(255, 255, 255, 0.95)",
+                    border: "1px solid #e5e7eb",
+                  }}
+                />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="totalSales"
+                  stroke="#8b5cf6"
+                  strokeWidth={2}
+                  name="Total Sales"
+                  dot={{ r: 4, fill: "#8b5cf6" }}
+                  activeDot={{ r: 6 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="totalCollected"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  name="Collected"
+                  dot={{ r: 4, fill: "#10b981" }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-gray-500">
+              No billing data available for selected period
+            </div>
+          )}
+        </Card>
+
+        {/* Payment Methods Chart */}
+        <Card title="Payment Methods Distribution">
+          {billingPaymentMethods?.breakdown &&
+          billingPaymentMethods.breakdown.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={billingPaymentMethods.breakdown}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={(entry) =>
+                    `${entry.name}: ${entry.percentage?.toFixed(1) || 0}%`
+                  }
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="amount"
+                >
+                  {billingPaymentMethods.breakdown.map(
+                    (entry: any, index: number) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    )
+                  )}
+                </Pie>
+                <Tooltip formatter={(value: any) => formatCurrency(value)} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-gray-500">
+              No payment method data available
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+
+  // Render Daily Operations Tab
+  const renderOperationsTab = () => (
     <div className="space-y-6">
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -165,7 +347,7 @@ export const Reports = () => {
               </p>
             </div>
             <div className="p-3 rounded-lg bg-blue-500">
-              <CurrencyDollarIcon className="w-6 h-6 text-white" />
+              <ShoppingBagIcon className="w-6 h-6 text-white" />
             </div>
           </div>
         </Card>
@@ -182,7 +364,7 @@ export const Reports = () => {
               <p className="text-xs text-gray-500 mt-1">Revenue collected</p>
             </div>
             <div className="p-3 rounded-lg bg-green-500">
-              <ChartBarIcon className="w-6 h-6 text-white" />
+              <CurrencyDollarIcon className="w-6 h-6 text-white" />
             </div>
           </div>
         </Card>
@@ -197,7 +379,7 @@ export const Reports = () => {
               <p className="text-xs text-gray-500 mt-1">Operating costs</p>
             </div>
             <div className="p-3 rounded-lg bg-red-500">
-              <DocumentTextIcon className="w-6 h-6 text-white" />
+              <ChartBarIcon className="w-6 h-6 text-white" />
             </div>
           </div>
         </Card>
@@ -405,9 +587,9 @@ export const Reports = () => {
       </div>
 
       {/* Payment Methods Distribution */}
-      <Card title="Payment Methods Distribution (Daily Sales)">
+      <Card title="Payment Methods Distribution">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {(dailySalesPaymentMethods || []).map((method: any) => (
+          {(operationsPaymentMethods || []).map((method: any) => (
             <div
               key={method.method}
               className="text-center p-4 bg-gray-50 rounded-lg"
@@ -619,7 +801,7 @@ export const Reports = () => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`
-                  group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm
+                  group inline-flex flex-col items-start py-4 px-1 border-b-2 font-medium text-sm
                   ${
                     activeTab === tab.id
                       ? "border-primary-500 text-primary-600"
@@ -627,17 +809,22 @@ export const Reports = () => {
                   }
                 `}
               >
-                <Icon
-                  className={`
-                    -ml-0.5 mr-2 h-5 w-5
-                    ${
-                      activeTab === tab.id
-                        ? "text-primary-500"
-                        : "text-gray-400 group-hover:text-gray-500"
-                    }
-                  `}
-                />
-                {tab.name}
+                <div className="flex items-center">
+                  <Icon
+                    className={`
+                      -ml-0.5 mr-2 h-5 w-5
+                      ${
+                        activeTab === tab.id
+                          ? "text-primary-500"
+                          : "text-gray-400 group-hover:text-gray-500"
+                      }
+                    `}
+                  />
+                  {tab.name}
+                </div>
+                <span className="text-xs text-gray-500 mt-1">
+                  {tab.description}
+                </span>
               </button>
             );
           })}
@@ -645,176 +832,8 @@ export const Reports = () => {
       </div>
 
       {/* Tab Content */}
-      {activeTab === "overview" && (
-        <div className="space-y-6">
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <Card>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Total Customers
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
-                    {dashboardData?.customers?.total || 0}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {dashboardData?.customers?.approved || 0} approved
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-blue-500">
-                  <ChartBarIcon className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </Card>
-
-            <Card>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Total Bills
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
-                    {formatCurrency(dashboardData?.bills?.amount || 0)}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {dashboardData?.bills?.total || 0} bills
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-purple-500">
-                  <DocumentTextIcon className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </Card>
-
-            <Card>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Total Collected
-                  </p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">
-                    {formatCurrency(dashboardData?.payments?.amount || 0)}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {dashboardData?.payments?.total || 0} payments
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-green-500">
-                  <CurrencyDollarIcon className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </Card>
-
-            <Card>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Outstanding
-                  </p>
-                  <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">
-                    {formatCurrency(dashboardData?.revenue?.outstanding || 0)}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {dashboardData?.revenue?.collectionRate?.toFixed(1) || 0}%
-                    collected
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-red-500">
-                  <CurrencyDollarIcon className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </Card>
-          </div>
-
-          {/* Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Monthly Trend Chart */}
-            <Card title="Revenue Trend">
-              {monthlyData && monthlyData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip
-                      formatter={(value: any) => formatCurrency(value)}
-                      contentStyle={{
-                        backgroundColor: "rgba(255, 255, 255, 0.95)",
-                        border: "1px solid #e5e7eb",
-                      }}
-                    />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="totalSales"
-                      stroke="#8b5cf6"
-                      strokeWidth={2}
-                      name="Total Sales"
-                      dot={{ r: 4, fill: "#8b5cf6" }}
-                      activeDot={{ r: 6 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="totalCollected"
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      name="Collected"
-                      dot={{ r: 4, fill: "#10b981" }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-[300px] text-gray-500">
-                  No data available for selected period
-                </div>
-              )}
-            </Card>
-
-            {/* Payment Methods Chart */}
-            <Card title="Payment Methods Distribution">
-              {paymentMethods?.breakdown &&
-              paymentMethods.breakdown.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={paymentMethods.breakdown}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={(entry) =>
-                        `${entry.name}: ${entry.percentage?.toFixed(1) || 0}%`
-                      }
-                      outerRadius={100}
-                      fill="#8884d8"
-                      dataKey="amount"
-                    >
-                      {paymentMethods.breakdown.map(
-                        (_entry: any, index: number) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={COLORS[index % COLORS.length]}
-                          />
-                        )
-                      )}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value: any) => formatCurrency(value)}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-[300px] text-gray-500">
-                  No payment method data available
-                </div>
-              )}
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {activeTab === "daily-sales" && renderDailySalesTab()}
+      {activeTab === "billing" && renderBillingTab()}
+      {activeTab === "operations" && renderOperationsTab()}
     </div>
   );
 };
