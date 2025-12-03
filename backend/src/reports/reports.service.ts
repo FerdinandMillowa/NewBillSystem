@@ -186,6 +186,99 @@ export class ReportsService {
     };
   }
 
+  // NEW METHOD: Get billing payment methods (from payments table)
+  async getBillingPaymentMethods(dateRangeDto?: DateRangeDto): Promise<any> {
+    let startDate: Date;
+    let endDate: Date;
+
+    if (dateRangeDto?.startDate && dateRangeDto?.endDate) {
+      startDate = new Date(dateRangeDto.startDate);
+      endDate = new Date(dateRangeDto.endDate);
+    } else {
+      // Default to all time
+      startDate = new Date(2000, 0, 1); // Very old date
+      endDate = new Date();
+    }
+
+    // Get all payments within date range
+    const payments = await this.paymentRepository.find({
+      where: {
+        createdAt: Between(startDate, endDate),
+      },
+      relations: ['customer'],
+    });
+
+    const methodTotals = {
+      cash: 0,
+      airtel_money: 0,
+      mpamba: 0,
+      bank: 0,
+      total: 0,
+    };
+
+    payments.forEach((payment) => {
+      const method = payment.paymentMethod?.toLowerCase() || 'cash';
+      const amount = parseFloat(payment.amount?.toString() || '0');
+      
+      // Map payment method to our categories
+      let mappedMethod = 'cash';
+      if (method.includes('airtel') || method.includes('airtel_money')) {
+        mappedMethod = 'airtel_money';
+      } else if (method.includes('mpamba')) {
+        mappedMethod = 'mpamba';
+      } else if (method.includes('bank')) {
+        mappedMethod = 'bank';
+      } else if (method === 'cash') {
+        mappedMethod = 'cash';
+      }
+      
+      if (methodTotals.hasOwnProperty(mappedMethod)) {
+        methodTotals[mappedMethod] += amount;
+      } else {
+        methodTotals.cash += amount; // default to cash if unknown
+      }
+      methodTotals.total += amount;
+    });
+
+    const total = methodTotals.total;
+    
+    const breakdown = [
+      {
+        method: 'cash',
+        name: 'Cash',
+        amount: methodTotals.cash,
+        percentage: total > 0 ? (methodTotals.cash / total) * 100 : 0,
+      },
+      {
+        method: 'airtel_money',
+        name: 'Airtel Money',
+        amount: methodTotals.airtel_money,
+        percentage: total > 0 ? (methodTotals.airtel_money / total) * 100 : 0,
+      },
+      {
+        method: 'mpamba',
+        name: 'Mpamba',
+        amount: methodTotals.mpamba,
+        percentage: total > 0 ? (methodTotals.mpamba / total) * 100 : 0,
+      },
+      {
+        method: 'bank',
+        name: 'Bank',
+        amount: methodTotals.bank,
+        percentage: total > 0 ? (methodTotals.bank / total) * 100 : 0,
+      },
+    ].filter((item) => item.amount > 0);
+
+    return {
+      cash: methodTotals.cash,
+      airtelMoney: methodTotals.airtel_money,
+      mpamba: methodTotals.mpamba,
+      bank: methodTotals.bank,
+      total,
+      breakdown,
+    };
+  }
+
   async getMonthlyReport(dateRangeDto?: DateRangeDto): Promise<any> {
     let startDate: Date;
     let endDate: Date;

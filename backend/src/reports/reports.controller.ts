@@ -18,10 +18,16 @@ export class ReportsController {
     return this.reportsService.getDashboardStats();
   }
 
-  // Get payment method distribution (ANY authenticated user can view)
+  // Get payment method distribution for TODAY'S daily sales
   @Get('payment-methods')
   getPaymentMethodDistribution() {
     return this.reportsService.getPaymentMethodDistribution();
+  }
+
+  // NEW ENDPOINT: Get billing payment methods (from payments table)
+  @Get('billing/payment-methods')
+  getBillingPaymentMethods(@Query() dateRangeDto: DateRangeDto) {
+    return this.reportsService.getBillingPaymentMethods(dateRangeDto);
   }
 
   // Get monthly report (ANY authenticated user can view)

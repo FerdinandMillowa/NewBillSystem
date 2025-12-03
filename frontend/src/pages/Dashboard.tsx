@@ -78,9 +78,10 @@ export const Dashboard = () => {
     queryFn: () => reportsService.getMonthly(),
   });
 
-  const { data: paymentMethods } = useQuery({
-    queryKey: ["payment-methods"],
-    queryFn: () => reportsService.getPaymentMethods(),
+  // UPDATED: Now using billing payment methods (from payments table)
+  const { data: billingPaymentMethods } = useQuery({
+    queryKey: ["billing-payment-methods"],
+    queryFn: () => reportsService.getBillingPaymentMethods(),
   });
 
   // NEW: Daily Operations queries
@@ -89,6 +90,15 @@ export const Dashboard = () => {
     queryKey: ["daily-sales-summary"],
     queryFn: () => reportsService.getDailySalesSummary(),
   });
+
+  // Calculate actual changes for operations stats
+  const calculateYesterdayChange = (currentValue: number) => {
+    // For now, we'll show no change until we implement actual yesterday comparison
+    return {
+      change: "0%",
+      changeType: "neutral" as "positive" | "negative" | "neutral",
+    };
+  };
 
   if (dashboardError) {
     return (
@@ -141,8 +151,6 @@ export const Dashboard = () => {
       icon: UsersIcon,
       color: "bg-blue-500",
       subtext: `${dashboardData?.customers?.approved || 0} approved`,
-      change: "+12%",
-      changeType: "positive",
     },
     {
       name: "Total Bills",
@@ -150,8 +158,6 @@ export const Dashboard = () => {
       icon: DocumentTextIcon,
       color: "bg-purple-500",
       subtext: `${dashboardData?.bills?.total || 0} bills issued`,
-      change: "+8%",
-      changeType: "positive",
     },
     {
       name: "Total Collected",
@@ -159,17 +165,15 @@ export const Dashboard = () => {
       icon: CreditCardIcon,
       color: "bg-green-500",
       subtext: `${dashboardData?.payments?.total || 0} payments`,
-      change: "+15%",
-      changeType: "positive",
     },
     {
       name: "Outstanding",
       value: formatCurrency(dashboardData?.revenue?.outstanding || 0),
       icon: CurrencyDollarIcon,
       color: "bg-red-500",
-      subtext: `${dashboardData?.revenue?.collectionRate || 0}% collected`,
-      change: "-5%",
-      changeType: "negative",
+      subtext: `${
+        dashboardData?.revenue?.collectionRate?.toFixed(1) || 0
+      }% collected`,
     },
   ];
 
@@ -180,20 +184,20 @@ export const Dashboard = () => {
       value: formatCurrency(dailySalesSummary?.summary?.totalSales || 0),
       icon: ShoppingBagIcon,
       color: "bg-indigo-500",
-      subtext: `${
-        dailySalesSummary?.summary?.totalTransactions || 0
-      } transactions`,
-      change: "+18%",
-      changeType: "positive",
+      subtext: `${dailySalesSummary?.summary?.totalDays || 0} days`,
+      ...calculateYesterdayChange(dailySalesSummary?.summary?.totalSales || 0),
     },
     {
       name: "Today's Revenue",
       value: formatCurrency(dailySalesSummary?.summary?.totalCollected || 0),
       icon: CurrencyDollarIcon,
       color: "bg-emerald-500",
-      subtext: `${dailySalesSummary?.summary?.totalNetRevenue || 0} net`,
-      change: "+22%",
-      changeType: "positive",
+      subtext: `${formatCurrency(
+        dailySalesSummary?.summary?.totalNetRevenue || 0
+      )} net`,
+      ...calculateYesterdayChange(
+        dailySalesSummary?.summary?.totalCollected || 0
+      ),
     },
     {
       name: "Today's Expenses",
@@ -201,8 +205,9 @@ export const Dashboard = () => {
       icon: ChartBarIcon,
       color: "bg-amber-500",
       subtext: "Operating costs",
-      change: "+5%",
-      changeType: "negative",
+      ...calculateYesterdayChange(
+        dailySalesSummary?.summary?.totalExpenses || 0
+      ),
     },
     {
       name: "Collection Rate",
@@ -210,8 +215,6 @@ export const Dashboard = () => {
       icon: CreditCardIcon,
       color: "bg-cyan-500",
       subtext: "Daily target: 95%",
-      change: "+3%",
-      changeType: "positive",
     },
   ];
 
@@ -226,7 +229,7 @@ export const Dashboard = () => {
     })) || [];
 
   const paymentMethodChartData =
-    paymentMethods?.breakdown?.map((item: any) => ({
+    billingPaymentMethods?.breakdown?.map((item: any) => ({
       name: item.name,
       value: item.amount,
       percentage: item.percentage,
@@ -311,20 +314,6 @@ export const Dashboard = () => {
                   <stat.icon className="w-6 h-6 text-white" />
                 </div>
               </div>
-              <div className="mt-4 flex items-center">
-                <span
-                  className={`text-sm font-medium ${
-                    stat.changeType === "positive"
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {stat.change}
-                </span>
-                <span className="text-xs text-gray-500 ml-2">
-                  vs last month
-                </span>
-              </div>
             </Card>
           ))}
         </div>
@@ -371,8 +360,8 @@ export const Dashboard = () => {
             )}
           </Card>
 
-          {/* Payment Methods Chart */}
-          <Card title="Payment Methods Distribution">
+          {/* Payment Methods Chart - NOW SHOWS BILLING PAYMENTS */}
+          <Card title="Payment Methods Distribution (All Payments)">
             {paymentMethodChartData && paymentMethodChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -537,18 +526,24 @@ export const Dashboard = () => {
                   <stat.icon className="w-6 h-6 text-white" />
                 </div>
               </div>
-              <div className="mt-4 flex items-center">
-                <span
-                  className={`text-sm font-medium ${
-                    stat.changeType === "positive"
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {stat.change}
-                </span>
-                <span className="text-xs text-gray-500 ml-2">vs yesterday</span>
-              </div>
+              {stat.change && (
+                <div className="mt-4 flex items-center">
+                  <span
+                    className={`text-sm font-medium ${
+                      stat.changeType === "positive"
+                        ? "text-green-600"
+                        : stat.changeType === "negative"
+                        ? "text-red-600"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    {stat.change}
+                  </span>
+                  <span className="text-xs text-gray-500 ml-2">
+                    vs yesterday
+                  </span>
+                </div>
+              )}
             </Card>
           ))}
         </div>

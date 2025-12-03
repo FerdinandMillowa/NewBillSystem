@@ -16,9 +16,15 @@ export const reportsService = {
     return data;
   },
 
-  // Get payment methods distribution
+  // Get payment methods distribution for TODAY'S daily sales (billing module)
   getPaymentMethods: async () => {
     const { data } = await api.get('/reports/payment-methods');
+    return data;
+  },
+
+  // NEW: Get billing payment methods (all payments from payments table)
+  getBillingPaymentMethods: async (params?: { startDate?: string; endDate?: string }) => {
+    const { data } = await api.get('/reports/billing/payment-methods', { params });
     return data;
   },
 

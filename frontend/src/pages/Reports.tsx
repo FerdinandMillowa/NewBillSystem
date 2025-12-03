@@ -69,8 +69,8 @@ export const Reports = () => {
   });
 
   const { data: billingPaymentMethods } = useQuery({
-    queryKey: ["billing-payment-methods"],
-    queryFn: () => reportsService.getPaymentMethods(),
+    queryKey: ["billing-payment-methods", dateRange],
+    queryFn: () => reportsService.getBillingPaymentMethods(dateRange),
     enabled: activeTab === "billing",
   });
 
