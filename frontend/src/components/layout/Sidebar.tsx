@@ -44,8 +44,14 @@ const navigation = [
   {
     name: "Daily Sales",
     href: "/daily-sales",
-    icon: DocumentChartBarIcon, // or use a different icon like DocumentChartBarIcon
+    icon: DocumentChartBarIcon,
     adminOnly: false,
+  },
+  {
+    name: "User Management",
+    href: "/users",
+    icon: UsersIcon,
+    adminOnly: true, // Only admins can access
   },
   { name: "Reports", href: "/reports", icon: ChartBarIcon, adminOnly: true },
   { name: "Settings", href: "/settings", icon: Cog6ToothIcon, adminOnly: true },
