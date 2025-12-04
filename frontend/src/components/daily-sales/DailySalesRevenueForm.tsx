@@ -1,7 +1,3 @@
-// ===============================================
-// src/components/daily-sales/DailySalesRevenueForm.tsx - FIXED
-// ===============================================
-
 import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
 import { formatCurrency } from "../../utils/formatters";
@@ -38,15 +34,19 @@ export const DailySalesRevenueForm = ({
 
   return (
     <Card title="Income Avenue (Revenue Collection)">
-      {/* Info Box */}
+      {/* ✅ FIXED: Info Box with Correct Formula */}
       <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
         <div className="flex items-start">
           <InformationCircleIcon className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
           <div className="text-sm text-blue-800">
             <p className="font-medium">Cash at Hand is Auto-Calculated</p>
             <p className="text-xs mt-1">
-              Cash = Total Sales (including bills) - Total Expenses - (Airtel
-              Money + Mpamba + Bank)
+              Cash = Total Sales (inventory) - Total Expenses - (Airtel Money +
+              Mpamba + Bank) - Bills Amount
+            </p>
+            <p className="text-xs mt-1 italic">
+              Bills are credit sales (customers didn't pay today), so they
+              reduce cash at hand.
             </p>
           </div>
         </div>

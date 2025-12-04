@@ -46,7 +46,7 @@ export class DailySales {
 
   // ===== SALES CALCULATIONS =====
   @Column({ type: 'decimal', precision: 12, scale: 2, name: 'total_sales' })
-  totalSales: number; // Sum of all inventory sold (revenue from products) + bills
+  totalSales: number; // ✅ FIX: Sum of inventory sold ONLY (no bills)
 
   @Column({
     type: 'decimal',
@@ -55,10 +55,19 @@ export class DailySales {
     name: 'bills_amount',
     default: 0,
   })
-  billsAmount: number; // Amount from bills created today (tracked separately)
+  billsAmount: number; // ✅ FIX: Credit sales (subtracted from cash, not added to sales)
+
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+    name: 'actual_cash_collected',
+  })
+  actualCashCollected: number | null; // Physical cash counted by manager
 
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
-  shortage: number; // totalSales - totalCollected (if positive, means shortage)
+  shortage: number; // ✅ NEW: cashAtHand - actualCashCollected (if entered), else totalSales - totalCollected
 
   // ===== EXPENSES =====
   @Column({

@@ -5,13 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  Repository,
-  Between,
-  MoreThanOrEqual,
-  LessThanOrEqual,
-  IsNull,
-} from 'typeorm';
+import { Repository, Between, MoreThanOrEqual, IsNull } from 'typeorm';
 import { DailySales } from '../database/entities/daily-sales.entity';
 import { DailyInventory } from '../database/entities/daily-inventory.entity';
 import { DailyExpense } from '../database/entities/daily-expense.entity';
@@ -44,8 +38,14 @@ export class DailySalesService {
   ) {}
 
   async create(createDailySalesDto: CreateDailySalesDto): Promise<DailySales> {
-    const { date, inventories, expenses, stockPurchases, ...salesData } =
-      createDailySalesDto;
+    const {
+      date,
+      inventories,
+      expenses,
+      stockPurchases,
+      actualCashCollected,
+      ...salesData
+    } = createDailySalesDto;
 
     // Check if daily sales already exists for this date
     const existingSales = await this.dailySalesRepository.findOne({
@@ -61,15 +61,14 @@ export class DailySalesService {
     // Check if previous day is finalized (sequential validation)
     await this.validateSequentialFinalization(new Date(date));
 
-    // FIX: Fetch bills ONLY for this dailySalesId (initially empty for new records)
-    // We'll link bills when they're created inline
+    // Fetch bills for this date
     const billsForDate = await this.billRepository.find({
       where: {
         createdAt: Between(
           new Date(date + 'T00:00:00'),
           new Date(date + 'T23:59:59'),
         ),
-        dailySalesId: IsNull(), // FIX: Use IsNull() instead of null
+        dailySalesId: IsNull(),
       },
       relations: ['customer'],
     });
@@ -80,8 +79,8 @@ export class DailySalesService {
       0,
     );
 
-    // FIX: Process stock purchases and validate Stock In
-    const purchasedProducts = new Map<string, number>(); // productId -> quantity purchased
+    // Process stock purchases and validate Stock In
+    const purchasedProducts = new Map<string, number>();
 
     if (stockPurchases && stockPurchases.length > 0) {
       for (const purchaseItem of stockPurchases) {
@@ -95,7 +94,6 @@ export class DailySalesService {
           );
         }
 
-        // Track purchased quantity
         const existingPurchased =
           purchasedProducts.get(purchaseItem.productId) || 0;
         purchasedProducts.set(
@@ -105,33 +103,31 @@ export class DailySalesService {
       }
     }
 
-    // FIX: Validate Stock In with Stock Purchases BEFORE processing inventory
+    // Validate Stock In with Stock Purchases
     for (const invItem of inventories) {
       const stockIn = invItem.stockIn || 0;
       const purchased = purchasedProducts.get(invItem.productId) || 0;
 
-      // If stockIn > 0, there MUST be a corresponding stock purchase
       if (stockIn > 0 && purchased === 0) {
         const product = await this.productRepository.findOne({
           where: { id: invItem.productId },
         });
         throw new BadRequestException(
-          `Stock In entered for "${product?.name}" but no Stock Purchase recorded. Please fill Stock Purchases section or set Stock In to 0.`,
+          `Stock In entered for "${product?.name}" but no Stock Purchase recorded.`,
         );
       }
 
-      // If both exist, they must match
       if (stockIn > 0 && purchased > 0 && stockIn !== purchased) {
         const product = await this.productRepository.findOne({
           where: { id: invItem.productId },
         });
         throw new BadRequestException(
-          `Stock In (${stockIn}) does not match Stock Purchase (${purchased}) for "${product?.name}". They must be equal.`,
+          `Stock In (${stockIn}) does not match Stock Purchase (${purchased}) for "${product?.name}".`,
         );
       }
     }
 
-    // FIX: Process inventory items and calculate total sales FROM INVENTORY ONLY
+    // Process inventory items and calculate total sales FROM INVENTORY ONLY
     let totalSalesFromInventory = 0;
     const inventoryRecords: DailyInventory[] = [];
 
@@ -174,10 +170,10 @@ export class DailySalesService {
       await this.productRepository.save(product);
     }
 
-    // FIX: Total Sales = Inventory Sales + Bills
-    const totalSales = totalSalesFromInventory + billsAmount;
+    // ✅ FIX: Total Sales = Inventory Sales ONLY (no bills)
+    const totalSales = totalSalesFromInventory;
 
-    // FIX: Process expenses correctly
+    // Process expenses correctly
     let totalExpenses = 0;
     let cashExpenses = 0;
     const expenseRecords: DailyExpense[] = [];
@@ -185,7 +181,7 @@ export class DailySalesService {
     if (expenses && expenses.length > 0) {
       for (const expItem of expenses) {
         const paymentMethod = expItem.paymentMethod || 'cash';
-        const amount = parseFloat(String(expItem.amount)) || 0; // Fix NaN issue
+        const amount = parseFloat(String(expItem.amount)) || 0;
         totalExpenses += amount;
 
         if (paymentMethod === 'cash') {
@@ -228,37 +224,46 @@ export class DailySalesService {
       }
     }
 
-    // FIX: CRITICAL FIX - Correct Cash Calculation
+    // Parse revenue collections
     const airtelMoney = parseFloat(String(salesData.airtelMoney)) || 0;
     const mpamba = parseFloat(String(salesData.mpamba)) || 0;
     const bank = parseFloat(String(salesData.bank)) || 0;
     const nonCashCollected = airtelMoney + mpamba + bank;
 
-    // FIX: Cash at Hand = Total Sales FROM INVENTORY - Total Expenses - Non-Cash Collections
-    // Bills are "credit sales" - not cash in hand
+    // ✅ CRITICAL FIX: Cash at Hand Calculation
+    // Cash = Inventory Sales - Expenses - Non-Cash Collections - Bills Amount
     const cashAtHand =
-      totalSalesFromInventory - totalExpenses - nonCashCollected;
+      totalSalesFromInventory - totalExpenses - nonCashCollected - billsAmount;
 
     // Total collected = Cash + Other payment methods (NOT including bills)
     const totalCollected = cashAtHand + nonCashCollected;
 
-    // Shortage = Total Sales - Total Collected
-    const shortage = totalSales - totalCollected;
+    // ✅ NEW: Actual Cash Collected (optional, manager input)
+    const actualCash =
+      actualCashCollected !== undefined
+        ? parseFloat(String(actualCashCollected)) || 0
+        : null;
 
-    // Net revenue = Total Sales - Total Expenses
+    // ✅ NEW: CORRECT Shortage Calculation
+    // Shortage = Expected Cash (system) - Actual Cash (physical count)
+    // Only calculated if manager has entered actual cash collected
+    const shortage = actualCash !== null ? cashAtHand - actualCash : 0;
+
+    // Net revenue = Total Sales - Expenses
     const netRevenue = totalSales - totalExpenses;
 
     // Create daily sales record
     const dailySales = this.dailySalesRepository.create({
       date: new Date(date),
-      cash: cashAtHand, // System-calculated cash
+      cash: cashAtHand, // System-calculated expected cash
       airtelMoney,
       mpamba,
       bank,
       totalCollected,
-      totalSales,
-      billsAmount,
-      shortage: shortage > 0 ? shortage : 0,
+      totalSales, // ✅ Inventory sales only
+      billsAmount, // ✅ Credit sales (tracked separately)
+      actualCashCollected: actualCash, // ✅ NEW: Physical cash counted by manager
+      shortage: shortage > 0 ? shortage : 0, // ✅ NEW: Real shortage if any
       totalExpenses,
       cashExpenses,
       netRevenue,
@@ -270,7 +275,7 @@ export class DailySalesService {
 
     const savedSales = await this.dailySalesRepository.save(dailySales);
 
-    // Save related records with proper error handling
+    // Save related records
     try {
       if (inventoryRecords.length > 0) {
         for (const inv of inventoryRecords) {
@@ -293,7 +298,7 @@ export class DailySalesService {
         await this.stockPurchaseRepository.save(stockPurchaseRecords);
       }
 
-      // FIX: Link bills to this daily sales record
+      // Link bills to this daily sales record
       if (billsForDate.length > 0) {
         for (const bill of billsForDate) {
           bill.dailySalesId = savedSales.id;
@@ -301,7 +306,6 @@ export class DailySalesService {
         await this.billRepository.save(billsForDate);
       }
     } catch (error) {
-      // Rollback if related records fail
       await this.dailySalesRepository.remove(savedSales);
       throw error;
     }
@@ -309,7 +313,37 @@ export class DailySalesService {
     return this.findOne(savedSales.id);
   }
 
-  // Sequential finalization validation
+  // ✅ NEW: Method to update actual cash collected (manager/admin only)
+  async updateActualCashCollected(
+    id: string,
+    actualCashCollected: number,
+  ): Promise<DailySales> {
+    const dailySales = await this.dailySalesRepository.findOne({
+      where: { id },
+    });
+
+    if (!dailySales) {
+      throw new NotFoundException('Daily sales record not found');
+    }
+
+    if (dailySales.status !== 'finalized') {
+      throw new BadRequestException(
+        'Can only update actual cash for finalized daily sales',
+      );
+    }
+
+    const actualCash = parseFloat(String(actualCashCollected)) || 0;
+    const cashAtHand = parseFloat(String(dailySales.cashAtHand)) || 0;
+
+    // Calculate shortage: Expected - Actual
+    const shortage = cashAtHand - actualCash;
+
+    dailySales.actualCashCollected = actualCash;
+    dailySales.shortage = shortage > 0 ? shortage : 0; // Only positive shortages
+
+    return this.dailySalesRepository.save(dailySales);
+  }
+
   private async validateSequentialFinalization(
     currentDate: Date,
   ): Promise<void> {
@@ -323,7 +357,7 @@ export class DailySalesService {
     if (previousDaySales && previousDaySales.status !== 'finalized') {
       const dateStr = previousDay.toISOString().split('T')[0];
       throw new BadRequestException(
-        `Previous day (${dateStr}) sales are not finalized. Please finalize it before entering sales for ${currentDate.toISOString().split('T')[0]}.`,
+        `Previous day (${dateStr}) sales are not finalized.`,
       );
     }
   }
@@ -346,7 +380,6 @@ export class DailySalesService {
       .leftJoinAndSelect('bills.customer', 'customer')
       .orderBy('dailySales.date', 'DESC');
 
-    // Date range filter
     if (startDate && endDate) {
       queryBuilder.where('dailySales.date BETWEEN :startDate AND :endDate', {
         startDate: new Date(startDate),
@@ -362,12 +395,10 @@ export class DailySalesService {
       });
     }
 
-    // Status filter
     if (status) {
       queryBuilder.andWhere('dailySales.status = :status', { status });
     }
 
-    // Pagination
     const skip = (page - 1) * limit;
     queryBuilder.skip(skip).take(limit);
 
@@ -471,7 +502,6 @@ export class DailySalesService {
     const { inventories, expenses, stockPurchases, ...salesData } =
       updateDailySalesDto;
 
-    // Delete existing related records
     if (dailySales.inventories?.length > 0) {
       await this.dailyInventoryRepository.remove(dailySales.inventories);
     }
@@ -482,7 +512,6 @@ export class DailySalesService {
       await this.stockPurchaseRepository.remove(dailySales.stockPurchases);
     }
 
-    // Recreate with updated data
     const dateStr = dailySales.date.toISOString().split('T')[0];
     await this.dailySalesRepository.remove(dailySales);
 
@@ -617,7 +646,6 @@ export class DailySalesService {
     return { message: 'Daily sales record deleted successfully' };
   }
 
-  // Analytics and Reporting
   async getWeeklySummary(startDate?: string): Promise<any> {
     const start = startDate ? new Date(startDate) : new Date();
     start.setDate(start.getDate() - 7);
@@ -690,7 +718,6 @@ export class DailySalesService {
     };
   }
 
-  // FIX: Update getBillsForDate to only get bills linked to dailySalesId
   async getBillsForDate(date: string, dailySalesId?: string): Promise<Bill[]> {
     const targetDate = new Date(date);
     const startOfDay = new Date(targetDate);
@@ -698,7 +725,6 @@ export class DailySalesService {
     const endOfDay = new Date(targetDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // If dailySalesId provided, get bills linked to it
     if (dailySalesId) {
       return this.billRepository.find({
         where: {
@@ -709,11 +735,10 @@ export class DailySalesService {
       });
     }
 
-    // Otherwise, get unlinked bills for this date
     return this.billRepository.find({
       where: {
         createdAt: Between(startOfDay, endOfDay),
-        dailySalesId: IsNull(), // FIX: Use IsNull() instead of null
+        dailySalesId: IsNull(),
       },
       relations: ['customer'],
       order: { createdAt: 'DESC' },

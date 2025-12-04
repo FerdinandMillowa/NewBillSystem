@@ -39,6 +39,12 @@ export class UpdateDailySalesDto {
   @IsOptional()
   billsAmount?: number;
 
+  // Manager's physical cash count
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  actualCashCollected?: number;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => DailyInventoryItemDto)

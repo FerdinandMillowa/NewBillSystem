@@ -104,6 +104,12 @@ export class CreateDailySalesDto {
   @IsOptional()
   billsAmount?: number;
 
+  // Manager's physical cash count
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  actualCashCollected?: number; // Manager's physical cash count
+
   // Inventory items
   @IsArray()
   @ValidateNested({ each: true })

@@ -50,13 +50,11 @@ export const DailySales = () => {
   const [stockPurchases, setStockPurchases] = useState<StockPurchaseItem[]>([]);
   const [notes, setNotes] = useState("");
 
-  // Fetch categories
   const { data: categories } = useQuery({
     queryKey: ["product-categories"],
     queryFn: () => productCategoriesService.getAll(),
   });
 
-  // Fetch all active products
   const { data: productsData } = useQuery({
     queryKey: ["products-for-daily-sales"],
     queryFn: () =>
@@ -66,7 +64,6 @@ export const DailySales = () => {
       }),
   });
 
-  // Fetch existing daily sales for selected date
   const { data: existingDailySales, isLoading: isLoadingExisting } = useQuery({
     queryKey: ["daily-sales-by-date", selectedDate],
     queryFn: () => dailySalesService.getByDate(selectedDate),
@@ -74,7 +71,6 @@ export const DailySales = () => {
     enabled: !!selectedDate,
   });
 
-  // Fetch bills for selected date
   const { data: billsForDate } = useQuery({
     queryKey: ["bills-by-date", selectedDate],
     queryFn: async () => {
@@ -84,16 +80,13 @@ export const DailySales = () => {
     enabled: !!selectedDate,
   });
 
-  // Calculate total bills amount for the selected date
   const billsAmount = (billsForDate || []).reduce(
     (sum: number, bill: any) => sum + parseFloat(bill.amount || 0),
     0
   );
 
-  // Initialize form with existing data or previous day's closing stock
   useEffect(() => {
     if (existingDailySales) {
-      // Load existing daily sales data
       setInventories(
         existingDailySales.inventories.map((inv) => ({
           productId: inv.productId,
@@ -111,7 +104,6 @@ export const DailySales = () => {
       setStockPurchases(existingDailySales.stockPurchases || []);
       setNotes(existingDailySales.notes || "");
     } else if (productsData?.products) {
-      // Initialize with product current stock as opening stock
       const initialInventories = productsData.products.map((product) => ({
         productId: product.id,
         openingStock: product.currentStock,
@@ -126,16 +118,13 @@ export const DailySales = () => {
     }
   }, [existingDailySales, productsData]);
 
-  // Validate stock purchases with stock in
   const validateStockPurchases = (): { valid: boolean; errors: string[] } => {
     const errors: string[] = [];
 
-    // Check each inventory item that has stockIn > 0
     inventories.forEach((inv) => {
       const stockIn = inv.stockIn || 0;
 
       if (stockIn > 0) {
-        // Find corresponding stock purchase
         const purchase = stockPurchases.find(
           (p) => p.productId === inv.productId
         );
@@ -164,11 +153,9 @@ export const DailySales = () => {
     };
   };
 
-  // Calculate totals with FIXED logic
   const calculateTotals = () => {
     let totalSalesFromInventory = 0;
 
-    // Calculate sales from inventory
     if (productsData?.products && inventories.length > 0) {
       inventories.forEach((inv) => {
         const product = productsData.products.find(
@@ -183,58 +170,48 @@ export const DailySales = () => {
       });
     }
 
-    // **CRITICAL FIX: Bills are CREDIT SALES, not cash**
-    // Total Sales = Inventory Sales + Bills
-    const totalSales = totalSalesFromInventory + billsAmount;
-
-    // Parse revenue to prevent NaN
     const airtelMoney = parseFloat(String(revenue.airtelMoney)) || 0;
     const mpamba = parseFloat(String(revenue.mpamba)) || 0;
     const bank = parseFloat(String(revenue.bank)) || 0;
     const nonCashCollected = airtelMoney + mpamba + bank;
 
-    // Calculate expenses (prevent NaN)
     const totalExpensesAmount = expenses.reduce(
       (sum, exp) => sum + (parseFloat(String(exp.amount)) || 0),
       0
     );
 
-    // **CRITICAL FIX: Cash at Hand Calculation**
-    // Cash = Inventory Sales (only) - Expenses - Non-Cash Collections
-    // Bills are NOT included in cash because they're credit sales
     const cashAtHand =
-      totalSalesFromInventory - totalExpensesAmount - nonCashCollected;
+      totalSalesFromInventory -
+      totalExpensesAmount -
+      nonCashCollected -
+      billsAmount;
 
-    // Total collected = Cash + Other methods (NOT including bills)
+    const totalSales = totalSalesFromInventory;
+
     const totalCollected = cashAtHand + nonCashCollected;
 
-    // **Shortage = Total Sales - Total Collected**
-    // This will equal billsAmount if all cash is accounted for
     const shortage = totalSales - totalCollected;
 
-    // Net revenue = Total Sales - Expenses
     const netRevenue = totalSales - totalExpensesAmount;
 
-    // Cash expenses only
     const cashExpenses = expenses
       .filter((exp) => exp.paymentMethod === "cash")
       .reduce((sum, exp) => sum + (parseFloat(String(exp.amount)) || 0), 0);
 
     return {
-      totalSales, // Inventory + Bills
-      totalCollected, // Cash + Non-Cash (excludes bills)
+      totalSales,
+      totalCollected,
       totalExpenses: totalExpensesAmount,
-      shortage: shortage > 0 ? shortage : 0, // Should equal billsAmount
+      shortage: shortage > 0 ? shortage : 0,
       netRevenue,
-      cashAtHand, // Actual cash in drawer
+      cashAtHand,
       cashExpenses,
-      totalSalesFromInventory, // Just inventory sales (excluding bills)
+      totalSalesFromInventory,
     };
   };
 
   const totals = calculateTotals();
 
-  // Auto-fill stock in from stock purchases
   useEffect(() => {
     if (stockPurchases.length > 0) {
       const updatedInventories = [...inventories];
@@ -245,7 +222,6 @@ export const DailySales = () => {
         );
 
         if (invIndex !== -1) {
-          // Only update if stockIn is 0 (user hasn't manually entered)
           if (updatedInventories[invIndex].stockIn === 0) {
             updatedInventories[invIndex] = {
               ...updatedInventories[invIndex],
@@ -259,7 +235,6 @@ export const DailySales = () => {
     }
   }, [stockPurchases]);
 
-  // Create/Update mutation
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
       if (existingDailySales) {
@@ -279,7 +254,6 @@ export const DailySales = () => {
       const message =
         error.response?.data?.message || "Failed to save daily sales";
 
-      // Check for sequential finalization error
       if (message.includes("not finalized")) {
         setShowPreviousDayWarning(true);
       }
@@ -288,7 +262,6 @@ export const DailySales = () => {
     },
   });
 
-  // Finalize mutation
   const finalizeMutation = useMutation({
     mutationFn: (id: string) => dailySalesService.finalize(id),
     onSuccess: () => {
@@ -303,7 +276,6 @@ export const DailySales = () => {
     },
   });
 
-  // Unlock mutation (admin only)
   const unlockMutation = useMutation({
     mutationFn: (id: string) => dailySalesService.unlock(id),
     onSuccess: () => {
@@ -319,7 +291,6 @@ export const DailySales = () => {
   });
 
   const handleSaveDraft = () => {
-    // Validate stock purchases
     const validation = validateStockPurchases();
     if (!validation.valid) {
       setValidationErrors(validation.errors);
@@ -331,7 +302,7 @@ export const DailySales = () => {
 
     const data = {
       date: selectedDate,
-      cash: totals.cashAtHand, // System-calculated cash
+      cash: totals.cashAtHand,
       ...revenue,
       billsAmount,
       inventories: inventories.filter((inv) => {
@@ -351,7 +322,6 @@ export const DailySales = () => {
       return;
     }
 
-    // Validate before finalizing
     const validation = validateStockPurchases();
     if (!validation.valid) {
       setValidationErrors(validation.errors);
@@ -386,7 +356,6 @@ export const DailySales = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -444,7 +413,6 @@ export const DailySales = () => {
         </div>
       </div>
 
-      {/* Previous Day Warning */}
       {showPreviousDayWarning && (
         <Card className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
           <div className="flex items-start">
@@ -469,7 +437,6 @@ export const DailySales = () => {
         </Card>
       )}
 
-      {/* Validation Errors */}
       {validationErrors.length > 0 && (
         <Card className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
           <div className="flex items-start">
@@ -499,7 +466,6 @@ export const DailySales = () => {
         </Card>
       )}
 
-      {/* Date Selector */}
       <Card>
         <div className="flex items-center space-x-4">
           <CalendarIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
@@ -523,7 +489,6 @@ export const DailySales = () => {
         </div>
       </Card>
 
-      {/* Bills Section with Inline Bill Creation */}
       <DailySalesBillsSection
         selectedDate={selectedDate}
         billsForDate={billsForDate || []}
@@ -534,14 +499,8 @@ export const DailySales = () => {
         }}
       />
 
-      {/* Summary Dashboard */}
-      <DailySalesSummary
-        totals={totals}
-        billsAmount={billsAmount}
-        totalSalesFromInventory={totals.totalSalesFromInventory}
-      />
+      <DailySalesSummary totals={totals} billsAmount={billsAmount} />
 
-      {/* Inventory Grid */}
       <DailySalesInventoryGrid
         products={productsData?.products || []}
         categories={categories || []}
@@ -550,7 +509,6 @@ export const DailySales = () => {
         isDisabled={isFinalized}
       />
 
-      {/* Revenue Collection */}
       <DailySalesRevenueForm
         revenue={revenue}
         cashAtHand={totals.cashAtHand}
@@ -558,14 +516,12 @@ export const DailySales = () => {
         isDisabled={isFinalized}
       />
 
-      {/* Expenses */}
       <DailySalesExpensesForm
         expenses={expenses}
         onExpensesChange={setExpenses}
         isDisabled={isFinalized}
       />
 
-      {/* Stock Purchases */}
       <DailySalesStockPurchases
         stockPurchases={stockPurchases}
         products={productsData?.products || []}
@@ -573,7 +529,6 @@ export const DailySales = () => {
         isDisabled={isFinalized}
       />
 
-      {/* Notes */}
       <Card title="Additional Notes">
         <textarea
           value={notes}
@@ -585,7 +540,6 @@ export const DailySales = () => {
         />
       </Card>
 
-      {/* Action Buttons */}
       {!isFinalized && (
         <div className="flex justify-end space-x-3">
           <Button

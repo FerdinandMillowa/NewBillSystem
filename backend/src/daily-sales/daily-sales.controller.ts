@@ -47,7 +47,7 @@ export class DailySalesController {
     return this.dailySalesService.getToday();
   }
 
-  // UPDATED: Get bills for a specific date
+  // Get bills for a specific date
   @Get('bills')
   getBillsForDate(
     @Query('date') date: string,
@@ -103,6 +103,16 @@ export class DailySalesController {
   @Roles(UserRole.ADMIN)
   unlock(@Param('id') id: string) {
     return this.dailySalesService.unlock(id);
+  }
+
+  // Update actual cash collected (admin only)
+  @Patch(':id/actual-cash')
+  @Roles(UserRole.ADMIN)
+  async updateActualCash(
+    @Param('id') id: string,
+    @Body('actualCashCollected') actualCashCollected: number,
+  ) {
+    return this.dailySalesService.updateActualCashCollected(id, actualCashCollected);
   }
 
   // Create inventory transfer (bottle to shot)
