@@ -185,6 +185,24 @@ export class UsersService {
     return { message: 'Password changed successfully' };
   }
 
+  async resetPassword(
+    userId: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await this.userRepository.save(user);
+
+    return { message: 'Password reset successfully' };
+  }
+
   async remove(id: string): Promise<{ message: string }> {
     const user = await this.userRepository.findOne({
       where: { id },

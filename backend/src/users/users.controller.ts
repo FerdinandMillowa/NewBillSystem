@@ -28,6 +28,41 @@ import { User } from '../database/entities/user.entity';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  // ============================================
+  // PROFILE ENDPOINTS (Any authenticated user)
+  // ============================================
+
+  // Get current user's profile
+  @Get('profile/me')
+  getMyProfile(@CurrentUser() currentUser: User) {
+    return this.usersService.findOne(currentUser.id);
+  }
+
+  // Update current user's profile (non-sensitive fields only)
+  @Patch('profile')
+  updateMyProfile(
+    @CurrentUser() currentUser: User,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
+    // Users can only update their own username, email, and fullName
+    // Remove sensitive fields that users shouldn't change themselves
+    const { role, status, password, ...allowedUpdates } = updateUserDto;
+    return this.usersService.update(currentUser.id, allowedUpdates);
+  }
+
+  // Change current user's password
+  @Patch('change-password')
+  changeMyPassword(
+    @CurrentUser() currentUser: User,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    return this.usersService.changePassword(currentUser.id, changePasswordDto);
+  }
+
+  // ============================================
+  // ADMIN ENDPOINTS (User Management)
+  // ============================================
+
   // Admin only - Create new user
   @Post()
   @Roles(UserRole.ADMIN)
@@ -60,25 +95,21 @@ export class UsersController {
     return this.usersService.findOne(id);
   }
 
-  // Admin only - Update user
+  // Admin only - Update any user (including sensitive fields)
   @Patch(':id')
   @Roles(UserRole.ADMIN)
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
 
-  // Change own password
-  @Patch(':id/change-password')
-  changePassword(
+  // Admin only - Reset user password
+  @Patch(':id/reset-password')
+  @Roles(UserRole.ADMIN)
+  resetPassword(
     @Param('id') id: string,
-    @Body() changePasswordDto: ChangePasswordDto,
-    @CurrentUser() currentUser: User,
+    @Body('newPassword') newPassword: string,
   ) {
-    // Users can only change their own password
-    if (currentUser.id !== id) {
-      throw new Error('You can only change your own password');
-    }
-    return this.usersService.changePassword(id, changePasswordDto);
+    return this.usersService.resetPassword(id, newPassword);
   }
 
   // Admin only - Delete user
