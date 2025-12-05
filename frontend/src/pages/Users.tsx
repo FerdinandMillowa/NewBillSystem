@@ -1,8 +1,3 @@
-// ============================================
-// NEW: src/pages/Users.tsx
-// User Management Module (Admin Only)
-// ============================================
-
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usersService } from "../services/users.service";
@@ -31,8 +26,8 @@ export const Users = () => {
   // Filters and pagination
   const [filters, setFilters] = useState({
     search: "",
-    role: "",
-    status: "",
+    role: "", // Empty string means "all roles"
+    status: "", // Empty string means "all statuses"
     page: 1,
     limit: 10,
   });
@@ -48,10 +43,33 @@ export const Users = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // Fetch users
+  // Fetch users - FIXED: Remove empty strings before sending to API
   const { data: usersData, isLoading } = useQuery({
     queryKey: ["users", filters],
-    queryFn: () => usersService.getAll(filters),
+    queryFn: () => {
+      // Create a clean filters object, removing empty strings
+      const apiFilters: any = {
+        page: filters.page,
+        limit: filters.limit,
+      };
+
+      // Only include search if not empty
+      if (filters.search.trim()) {
+        apiFilters.search = filters.search;
+      }
+
+      // Only include role if not empty (API expects lowercase enum values)
+      if (filters.role) {
+        apiFilters.role = filters.role.toLowerCase();
+      }
+
+      // Only include status if not empty (API expects lowercase enum values)
+      if (filters.status) {
+        apiFilters.status = filters.status.toLowerCase();
+      }
+
+      return usersService.getAll(apiFilters);
+    },
   });
 
   // Fetch stats

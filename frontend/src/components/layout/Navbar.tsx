@@ -1,9 +1,11 @@
 import { Menu, Transition } from "@headlessui/react";
 import { Fragment } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import {
   UserCircleIcon,
+  Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
   Bars3Icon,
   Bars3BottomLeftIcon,
@@ -83,18 +85,50 @@ export const Navbar = ({
             leaveFrom="transform opacity-100 scale-100"
             leaveTo="transform opacity-0 scale-95"
           >
-            <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right bg-white dark:bg-gray-800 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-gray-700 focus:outline-none">
+            <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right bg-white dark:bg-gray-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-gray-700 focus:outline-none">
               <div className="py-1">
+                {/* Profile Link */}
+                <Menu.Item>
+                  {({ active }) => (
+                    <Link
+                      to="/profile"
+                      className={`${
+                        active ? "bg-gray-100 dark:bg-gray-700" : ""
+                      } flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300`}
+                    >
+                      <UserCircleIcon className="w-5 h-5 mr-3" />
+                      My Profile
+                    </Link>
+                  )}
+                </Menu.Item>
+
+                {/* Settings Link */}
+                <Menu.Item>
+                  {({ active }) => (
+                    <Link
+                      to="/settings"
+                      className={`${
+                        active ? "bg-gray-100 dark:bg-gray-700" : ""
+                      } flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300`}
+                    >
+                      <Cog6ToothIcon className="w-5 h-5 mr-3" />
+                      Settings
+                    </Link>
+                  )}
+                </Menu.Item>
+
+                <div className="border-t border-gray-200 dark:border-gray-700"></div>
+
+                {/* Logout */}
                 <Menu.Item>
                   {({ active }) => (
                     <button
                       onClick={handleLogout}
-                      className={clsx(
-                        "flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300",
+                      className={`${
                         active ? "bg-gray-100 dark:bg-gray-700" : ""
-                      )}
+                      } flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400`}
                     >
-                      <ArrowRightOnRectangleIcon className="mr-3 h-5 w-5 text-gray-400 dark:text-gray-500" />
+                      <ArrowRightOnRectangleIcon className="w-5 h-5 mr-3" />
                       Logout
                     </button>
                   )}
