@@ -1,17 +1,33 @@
-import { IsNotEmpty, IsString, IsOptional, IsUUID } from 'class-validator';
+import {
+  IsEnum,
+  IsString,
+  IsOptional,
+  IsUUID,
+  IsObject,
+} from 'class-validator';
+import {
+  ActivityAction,
+  ActivityEntity,
+} from '../../database/entities/activity-log.entity';
 
 export class CreateActivityLogDto {
   @IsUUID()
   @IsOptional()
   userId?: string;
 
-  @IsString()
-  @IsNotEmpty()
-  action: string;
+  @IsEnum(ActivityAction)
+  action: ActivityAction;
 
-  @IsString()
+  @IsEnum(ActivityEntity)
+  entity: ActivityEntity;
+
+  @IsUUID()
   @IsOptional()
-  details?: string;
+  entityId?: string;
+
+  @IsObject()
+  @IsOptional()
+  details?: any; // Will be stringified
 
   @IsString()
   @IsOptional()

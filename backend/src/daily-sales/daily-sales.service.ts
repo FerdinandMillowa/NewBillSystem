@@ -37,6 +37,50 @@ export class DailySalesService {
     private billRepository: Repository<Bill>,
   ) {}
 
+  // ✅ NEW METHOD: Get or create draft daily sales for a date
+  async getOrCreateDraftForDate(date: string): Promise<DailySales> {
+    const targetDate = new Date(date);
+    targetDate.setHours(0, 0, 0, 0);
+
+    // Try to find existing record
+    let dailySales = await this.dailySalesRepository.findOne({
+      where: { date: targetDate },
+      relations: ['inventories', 'expenses', 'stockPurchases', 'bills'],
+    });
+
+    // If exists, return it
+    if (dailySales) {
+      return dailySales;
+    }
+
+    // If doesn't exist, create a minimal draft
+    // Get all active products for initialization
+    const products = await this.productRepository.find({
+      where: { isActive: true },
+    });
+
+    // Initialize with current stock as opening and closing stock
+    const inventories = products.map((product) => ({
+      productId: product.id,
+      openingStock: product.currentStock,
+      stockIn: 0,
+      closingStock: product.currentStock,
+    }));
+
+    // Create draft with minimal data
+    const createDto: CreateDailySalesDto = {
+      date,
+      inventories,
+      expenses: [],
+      stockPurchases: [],
+    };
+
+    // Create the daily sales record
+    dailySales = await this.create(createDto);
+
+    return dailySales;
+  }
+
   async create(createDailySalesDto: CreateDailySalesDto): Promise<DailySales> {
     const {
       date,
@@ -231,23 +275,28 @@ export class DailySalesService {
     const nonCashCollected = airtelMoney + mpamba + bank;
 
     // ✅ CRITICAL FIX: Cash at Hand Calculation
-    // Cash = Inventory Sales - Expenses - Non-Cash Collections - Bills Amount
     const cashAtHand =
       totalSalesFromInventory - totalExpenses - nonCashCollected - billsAmount;
 
     // Total collected = Cash + Other payment methods (NOT including bills)
     const totalCollected = cashAtHand + nonCashCollected;
 
-    // ✅ NEW: Actual Cash Collected (optional, manager input)
-    const actualCash =
-      actualCashCollected !== undefined
-        ? parseFloat(String(actualCashCollected)) || 0
-        : null;
+    // ✅ CRITICAL FIX: Actual Cash Collected (optional, manager input)
+    // IMPORTANT: Check if actualCashCollected is explicitly provided AND not undefined/null
+    let actualCash: number | null = null;
+    if (actualCashCollected !== undefined && actualCashCollected !== null) {
+      actualCash = parseFloat(String(actualCashCollected));
+    }
 
-    // ✅ NEW: CORRECT Shortage Calculation
-    // Shortage = Expected Cash (system) - Actual Cash (physical count)
-    // Only calculated if manager has entered actual cash collected
-    const shortage = actualCash !== null ? cashAtHand - actualCash : 0;
+    // ✅ CRITICAL FIX: Shortage ONLY calculated if manager entered actual cash
+    // Logic:
+    // 1. If actualCash is null (not entered) → shortage = 0 (not calculated)
+    // 2. If actualCash is provided → shortage = cashAtHand - actualCash (if positive)
+    let shortage = 0;
+    if (actualCash !== null) {
+      const difference = cashAtHand - actualCash;
+      shortage = difference > 0 ? difference : 0; // Only positive shortages
+    }
 
     // Net revenue = Total Sales - Expenses
     const netRevenue = totalSales - totalExpenses;
@@ -262,8 +311,8 @@ export class DailySalesService {
       totalCollected,
       totalSales, // ✅ Inventory sales only
       billsAmount, // ✅ Credit sales (tracked separately)
-      actualCashCollected: actualCash, // ✅ NEW: Physical cash counted by manager
-      shortage: shortage > 0 ? shortage : 0, // ✅ NEW: Real shortage if any
+      actualCashCollected: actualCash, // ✅ null if not entered
+      shortage, // ✅ 0 if actualCash is null, otherwise calculated
       totalExpenses,
       cashExpenses,
       netRevenue,
@@ -313,10 +362,10 @@ export class DailySalesService {
     return this.findOne(savedSales.id);
   }
 
-  // ✅ NEW: Method to update actual cash collected (manager/admin only)
+  // ✅ CRITICAL FIX: Method to update actual cash collected (manager/admin only)
   async updateActualCashCollected(
     id: string,
-    actualCashCollected: number,
+    actualCashCollected: number | null,
   ): Promise<DailySales> {
     const dailySales = await this.dailySalesRepository.findOne({
       where: { id },
@@ -332,14 +381,22 @@ export class DailySalesService {
       );
     }
 
-    const actualCash = parseFloat(String(actualCashCollected)) || 0;
-    const cashAtHand = parseFloat(String(dailySales.cashAtHand)) || 0;
+    // ✅ CRITICAL FIX: Handle null/undefined correctly
+    let actualCash: number | null = null;
+    let shortage = 0;
 
-    // Calculate shortage: Expected - Actual
-    const shortage = cashAtHand - actualCash;
+    // Only calculate shortage if actualCashCollected is explicitly provided
+    if (actualCashCollected !== undefined && actualCashCollected !== null) {
+      actualCash = parseFloat(String(actualCashCollected));
+      const cashAtHand = parseFloat(String(dailySales.cashAtHand)) || 0;
+
+      // Calculate shortage: Expected - Actual
+      const difference = cashAtHand - actualCash;
+      shortage = difference > 0 ? difference : 0; // Only positive shortages
+    }
 
     dailySales.actualCashCollected = actualCash;
-    dailySales.shortage = shortage > 0 ? shortage : 0; // Only positive shortages
+    dailySales.shortage = shortage;
 
     return this.dailySalesRepository.save(dailySales);
   }

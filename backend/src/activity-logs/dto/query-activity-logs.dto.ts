@@ -1,25 +1,37 @@
 import {
   IsOptional,
+  IsEnum,
   IsString,
   IsInt,
   Min,
-  IsUUID,
   IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import {
+  ActivityAction,
+  ActivityEntity,
+} from '../../database/entities/activity-log.entity';
 
 export class QueryActivityLogsDto {
   @IsOptional()
-  @IsUUID()
+  @IsString()
   userId?: string;
 
   @IsOptional()
-  @IsString()
-  action?: string;
+  @IsEnum(ActivityAction)
+  action?: ActivityAction;
+
+  @IsOptional()
+  @IsEnum(ActivityEntity)
+  entity?: ActivityEntity;
 
   @IsOptional()
   @IsString()
-  search?: string;
+  entityId?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string; // Search in details
 
   @IsOptional()
   @IsDateString()

@@ -1,4 +1,3 @@
-
 import api from "./api";
 
 export const dailySalesService = {
@@ -38,6 +37,12 @@ export const dailySalesService = {
     return response.data;
   },
 
+  // ✅ NEW: Get or create draft daily sales for a date
+  getOrCreateDraft: async (date: string) => {
+    const response = await api.get(`/daily-sales/draft/${date}`);
+    return response.data;
+  },
+
   // UPDATED: Get bills for a specific date with optional dailySalesId
   getBillsForDate: async (date: string, dailySalesId?: string) => {
     const params: any = { date };
@@ -68,6 +73,10 @@ export const dailySalesService = {
   finalize: async (id: string) => {
     const response = await api.patch(`/daily-sales/${id}/finalize`);
     return response.data;
+  },
+
+  updateActualCashCollected(id: string, actualCashCollected: number | null) {
+    return api.patch(`/daily-sales/${id}/actual-cash`, { actualCashCollected });
   },
 
   // Unlock daily sales (admin only)

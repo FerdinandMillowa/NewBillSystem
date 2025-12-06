@@ -25,7 +25,7 @@ export class Bill {
   description: string;
 
   @Column({ name: 'daily_sales_id', type: 'uuid', nullable: true })
-  dailySalesId: string;
+  dailySalesId: string | null; // ✅ Change to string | null
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
@@ -43,5 +43,5 @@ export class Bill {
     nullable: true,
   })
   @JoinColumn({ name: 'daily_sales_id' })
-  dailySales: DailySales;
+  dailySales: DailySales | null; // ✅ Make this nullable too
 }

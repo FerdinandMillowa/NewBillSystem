@@ -14,6 +14,7 @@ import { DailySalesSummary } from "../components/daily-sales/DailySalesSummary";
 import { DailySalesBillsSection } from "../components/daily-sales/DailySalesBillsSection";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
+import { ActualCashInput } from "../components/daily-sales/ActualCashInput";
 import {
   CalendarIcon,
   CheckCircleIcon,
@@ -71,7 +72,7 @@ export const DailySales = () => {
     enabled: !!selectedDate,
   });
 
-  const { data: billsForDate } = useQuery({
+  const { data: billsForDate, refetch: refetchBills } = useQuery({
     queryKey: ["bills-by-date", selectedDate],
     queryFn: async () => {
       const response = await dailySalesService.getBillsForDate(selectedDate);
@@ -190,7 +191,8 @@ export const DailySales = () => {
 
     const totalCollected = cashAtHand + nonCashCollected;
 
-    const shortage = totalSales - totalCollected;
+    // ✅ FIXED: Shortage should be 0 on frontend (only calculated in backend when actual cash is entered)
+    const shortage = 0; // Frontend doesn't calculate shortage
 
     const netRevenue = totalSales - totalExpensesAmount;
 
@@ -202,7 +204,7 @@ export const DailySales = () => {
       totalSales,
       totalCollected,
       totalExpenses: totalExpensesAmount,
-      shortage: shortage > 0 ? shortage : 0,
+      shortage, // ✅ Always 0 on frontend
       netRevenue,
       cashAtHand,
       cashExpenses,
@@ -495,7 +497,11 @@ export const DailySales = () => {
         billsAmount={billsAmount}
         isDisabled={isFinalized}
         onBillCreated={() => {
-          queryClient.invalidateQueries({ queryKey: ["bills-by-date"] });
+          // ✅ CRITICAL FIX: Refetch bills immediately after creation
+          refetchBills();
+          queryClient.invalidateQueries({
+            queryKey: ["bills-by-date", selectedDate],
+          });
         }}
       />
 
@@ -583,6 +589,14 @@ export const DailySales = () => {
             </div>
           </div>
         </Card>
+      )}
+
+      {isFinalized && isAdmin && existingDailySales && (
+        <ActualCashInput
+          dailySalesId={existingDailySales.id}
+          currentCashAtHand={existingDailySales.cashAtHand || 0}
+          currentActualCash={existingDailySales.actualCashCollected}
+        />
       )}
     </div>
   );

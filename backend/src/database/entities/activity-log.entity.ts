@@ -5,35 +5,97 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from './user.entity';
 
+export enum ActivityAction {
+  // User actions
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+
+  // Auth actions
+  LOGIN = 'login',
+  LOGOUT = 'logout',
+  REGISTER = 'register',
+  REFRESH_TOKEN = 'refresh_token',
+
+  // Approval actions
+  APPROVE = 'approve',
+  REJECT = 'reject',
+
+  // Daily Sales actions
+  FINALIZE = 'finalize',
+  UNLOCK = 'unlock',
+  UPDATE_CASH = 'update_cash',
+
+  // Inventory actions
+  TRANSFER = 'transfer',
+
+  // Password actions
+  RESET_PASSWORD = 'reset_password',
+  CHANGE_PASSWORD = 'change_password',
+}
+
+export enum ActivityEntity {
+  USER = 'user',
+  CUSTOMER = 'customer',
+  BILL = 'bill',
+  PAYMENT = 'payment',
+  PRODUCT = 'product',
+  PRODUCT_CATEGORY = 'product_category',
+  DAILY_SALES = 'daily_sales',
+  STOCK_PURCHASE = 'stock_purchase',
+  EXPENSE = 'expense',
+  INVENTORY = 'inventory',
+  INVENTORY_TRANSFER = 'inventory_transfer',
+  AUTH = 'auth',
+}
+
 @Entity('activity_logs')
+@Index(['userId'])
+@Index(['entity', 'entityId'])
+@Index(['action'])
+@Index(['createdAt'])
 export class ActivityLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'user_id', type: 'uuid', nullable: true })
-  userId: string | null;
+  @Column({ nullable: true })
+  userId?: string;
 
-  @Column({ type: 'varchar', length: 255 })
-  action: string;
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'userId' })
+  user?: User;
+
+  @Column({
+    type: 'enum',
+    enum: ActivityAction,
+  })
+  action: ActivityAction;
+
+  @Column({
+    type: 'enum',
+    enum: ActivityEntity,
+  })
+  entity: ActivityEntity;
+
+  @Column({ nullable: true })
+  entityId?: string;
 
   @Column({ type: 'text', nullable: true })
-  details: string | null;
+  details?: string;
 
-  @Column({ name: 'ip_address', type: 'varchar', length: 45, nullable: true })
-  ipAddress: string | null;
+  @Column({ nullable: true })
+  ipAddress?: string;
 
-  @Column({ name: 'user_agent', type: 'text', nullable: true })
-  userAgent: string | null;
+  @Column({ nullable: true })
+  userAgent?: string;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
+  @CreateDateColumn()
   createdAt: Date;
 
-  @ManyToOne(() => User, (user: User) => user.activityLogs, {
-    onDelete: 'SET NULL',
-  })
-  @JoinColumn({ name: 'user_id' })
-  user: User | null;
+  @Column({ nullable: true })
+  resolvedAt?: Date;
 }

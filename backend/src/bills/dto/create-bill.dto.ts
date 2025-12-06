@@ -1,9 +1,20 @@
-import { IsNotEmpty, IsString, IsNumber, IsUUID, Min } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsNumber,
+  IsUUID,
+  Min,
+  IsOptional,
+} from 'class-validator';
 
 export class CreateBillDto {
   @IsUUID()
   @IsNotEmpty()
   customerId: string;
+
+  @IsOptional()
+  @IsUUID()
+  dailySalesId?: string;
 
   @IsNumber()
   @IsNotEmpty()

@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
-import { ActivityLog } from '../database/entities/activity-log.entity';
+import { Repository } from 'typeorm';
+import {
+  ActivityLog,
+  ActivityAction,
+  ActivityEntity,
+} from '../database/entities/activity-log.entity';
 import { User } from '../database/entities/user.entity';
 import { CreateActivityLogDto } from './dto/create-activity-log.dto';
 import { QueryActivityLogsDto } from './dto/query-activity-logs.dto';
@@ -18,24 +22,44 @@ export class ActivityLogsService {
   async create(
     createActivityLogDto: CreateActivityLogDto,
   ): Promise<ActivityLog> {
-    const activityLog = this.activityLogRepository.create(createActivityLogDto);
+    // Create activity log object with explicit typing
+    const activityLogData: Partial<ActivityLog> = {
+      userId: createActivityLogDto.userId || undefined, // Convert empty to undefined
+      action: createActivityLogDto.action,
+      entity: createActivityLogDto.entity,
+      entityId: createActivityLogDto.entityId || undefined,
+      details: createActivityLogDto.details
+        ? JSON.stringify(createActivityLogDto.details)
+        : undefined,
+      ipAddress: createActivityLogDto.ipAddress || undefined,
+      userAgent: createActivityLogDto.userAgent || undefined,
+    };
+
+    const activityLog = this.activityLogRepository.create(activityLogData);
     return this.activityLogRepository.save(activityLog);
   }
 
   async log(
-    action: string,
+    action: ActivityAction,
+    entity: ActivityEntity,
     userId?: string,
-    details?: string,
+    entityId?: string,
+    details?: any,
     ipAddress?: string,
     userAgent?: string,
   ): Promise<ActivityLog> {
-    const activityLog = this.activityLogRepository.create({
-      userId,
+    // Create activity log object with explicit typing
+    const activityLogData: Partial<ActivityLog> = {
+      userId: userId || undefined,
       action,
-      details,
-      ipAddress,
-      userAgent,
-    });
+      entity,
+      entityId: entityId || undefined,
+      details: details ? JSON.stringify(details) : undefined,
+      ipAddress: ipAddress || undefined,
+      userAgent: userAgent || undefined,
+    };
+
+    const activityLog = this.activityLogRepository.create(activityLogData);
     return this.activityLogRepository.save(activityLog);
   }
 
@@ -48,6 +72,8 @@ export class ActivityLogsService {
     const {
       userId,
       action,
+      entity,
+      entityId,
       search,
       startDate,
       endDate,
@@ -61,22 +87,29 @@ export class ActivityLogsService {
 
     // Filter by user
     if (userId) {
-      queryBuilder.where('log.userId = :userId', { userId });
+      queryBuilder.andWhere('log.userId = :userId', { userId });
     }
 
     // Filter by action
     if (action) {
-      queryBuilder.andWhere('log.action ILIKE :action', {
-        action: `%${action}%`,
-      });
+      queryBuilder.andWhere('log.action = :action', { action });
     }
 
-    // Search in action or details
+    // Filter by entity
+    if (entity) {
+      queryBuilder.andWhere('log.entity = :entity', { entity });
+    }
+
+    // Filter by entity ID
+    if (entityId) {
+      queryBuilder.andWhere('log.entityId = :entityId', { entityId });
+    }
+
+    // Search in details
     if (search) {
-      queryBuilder.andWhere(
-        '(log.action ILIKE :search OR log.details ILIKE :search)',
-        { search: `%${search}%` },
-      );
+      queryBuilder.andWhere('log.details ILIKE :search', {
+        search: `%${search}%`,
+      });
     }
 
     // Date range filter
@@ -105,7 +138,10 @@ export class ActivityLogsService {
     const [logs, total] = await queryBuilder.getManyAndCount();
 
     return {
-      logs,
+      logs: logs.map((log) => ({
+        ...log,
+        details: log.details ? JSON.parse(log.details) : null,
+      })),
       total,
       page,
       limit,
@@ -113,19 +149,30 @@ export class ActivityLogsService {
   }
 
   async findByUser(userId: string, limit: number = 50): Promise<ActivityLog[]> {
-    return this.activityLogRepository.find({
+    const logs = await this.activityLogRepository.find({
       where: { userId },
       order: { createdAt: 'DESC' },
       take: limit,
+      relations: ['user'],
     });
+
+    return logs.map((log) => ({
+      ...log,
+      details: log.details ? JSON.parse(log.details) : null,
+    }));
   }
 
   async getRecentActivity(limit: number = 20): Promise<ActivityLog[]> {
-    return this.activityLogRepository.find({
+    const logs = await this.activityLogRepository.find({
       relations: ['user'],
       order: { createdAt: 'DESC' },
       take: limit,
     });
+
+    return logs.map((log) => ({
+      ...log,
+      details: log.details ? JSON.parse(log.details) : null,
+    }));
   }
 
   async getActionStats(): Promise<any> {

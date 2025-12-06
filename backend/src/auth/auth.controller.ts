@@ -16,6 +16,11 @@ import { AuthResponse } from './interfaces/auth-response.interface';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User } from '../database/entities/user.entity';
+import { LogActivity } from '../common/decorators/log-activity.decorator'; // ADD THIS
+import {
+  ActivityAction,
+  ActivityEntity,
+} from '../database/entities/activity-log.entity'; // ADD THIS
 
 @Controller('auth')
 export class AuthController {
@@ -23,18 +28,35 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @LogActivity({
+    action: ActivityAction.REGISTER,
+    entity: ActivityEntity.USER,
+    getMessage: (result) =>
+      `Registered new user: ${result.user?.email || result.email}`,
+  })
   async register(@Body() registerDto: RegisterDto): Promise<AuthResponse> {
     return this.authService.register(registerDto);
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @LogActivity({
+    action: ActivityAction.LOGIN,
+    entity: ActivityEntity.AUTH,
+    getMessage: (result, params) =>
+      `User logged in: ${params.body?.email || params.body?.username}`,
+  })
   async login(@Body() loginDto: LoginDto): Promise<AuthResponse> {
     return this.authService.login(loginDto);
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @LogActivity({
+    action: ActivityAction.REFRESH_TOKEN,
+    entity: ActivityEntity.AUTH,
+    getMessage: () => `User refreshed token`,
+  })
   async refreshToken(
     @Body() refreshTokenDto: RefreshTokenDto,
     @Req() req: any,
@@ -52,6 +74,11 @@ export class AuthController {
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
+  @LogActivity({
+    action: ActivityAction.LOGOUT,
+    entity: ActivityEntity.AUTH,
+    getMessage: (result, params) => `User logged out`,
+  })
   async logout(@CurrentUser() user: User): Promise<{ message: string }> {
     await this.authService.logout(user.id);
     return { message: 'Logged out successfully' };
@@ -63,6 +90,7 @@ export class AuthController {
     const { password, refreshToken, ...result } = user;
     return result;
   }
+
   @Get('register')
   getRegisterTest() {
     return {

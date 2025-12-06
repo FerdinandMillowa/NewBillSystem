@@ -22,7 +22,7 @@ export class BillsService {
   ) {}
 
   async create(createBillDto: CreateBillDto): Promise<Bill> {
-    const { customerId, amount, description } = createBillDto;
+    const { customerId, dailySalesId, amount, description } = createBillDto;
 
     // Verify customer exists and is approved
     const customer = await this.customerRepository.findOne({
@@ -39,11 +39,12 @@ export class BillsService {
       );
     }
 
-    // Create bill
+    // ✅ FIXED: Create bill object correctly
     const bill = this.billRepository.create({
       customerId,
       amount,
       description,
+      dailySalesId: dailySalesId || null, // ✅ Handle null correctly
     });
 
     return this.billRepository.save(bill);

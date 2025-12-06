@@ -22,6 +22,11 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '../common/enums';
 import { User } from '../database/entities/user.entity';
+import { LogActivity } from '../common/decorators/log-activity.decorator'; // ADD THIS
+import {
+  ActivityAction,
+  ActivityEntity,
+} from '../database/entities/activity-log.entity'; // ADD THIS
 
 @Controller('daily-sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,6 +36,11 @@ export class DailySalesController {
   // Create daily sales (any authenticated user)
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @LogActivity({
+    action: ActivityAction.CREATE,
+    entity: ActivityEntity.DAILY_SALES,
+    getMessage: (result) => `Created daily sales for ${result.date}`,
+  })
   create(@Body() createDailySalesDto: CreateDailySalesDto) {
     return this.dailySalesService.create(createDailySalesDto);
   }
@@ -85,6 +95,11 @@ export class DailySalesController {
 
   // Update daily sales
   @Patch(':id')
+  @LogActivity({
+    action: ActivityAction.UPDATE,
+    entity: ActivityEntity.DAILY_SALES,
+    getMessage: (result) => `Updated daily sales for ${result.date}`,
+  })
   update(
     @Param('id') id: string,
     @Body() updateDailySalesDto: UpdateDailySalesDto,
@@ -94,6 +109,11 @@ export class DailySalesController {
 
   // Finalize daily sales
   @Patch(':id/finalize')
+  @LogActivity({
+    action: ActivityAction.FINALIZE,
+    entity: ActivityEntity.DAILY_SALES,
+    getMessage: (result) => `Finalized daily sales for ${result.date}`,
+  })
   finalize(@Param('id') id: string) {
     return this.dailySalesService.finalize(id);
   }
@@ -101,6 +121,11 @@ export class DailySalesController {
   // Unlock daily sales (admin only)
   @Patch(':id/unlock')
   @Roles(UserRole.ADMIN)
+  @LogActivity({
+    action: ActivityAction.UNLOCK,
+    entity: ActivityEntity.DAILY_SALES,
+    getMessage: (result) => `Unlocked daily sales for ${result.date}`,
+  })
   unlock(@Param('id') id: string) {
     return this.dailySalesService.unlock(id);
   }
@@ -108,15 +133,30 @@ export class DailySalesController {
   // Update actual cash collected (admin only)
   @Patch(':id/actual-cash')
   @Roles(UserRole.ADMIN)
+  @LogActivity({
+    action: ActivityAction.UPDATE_CASH,
+    entity: ActivityEntity.DAILY_SALES,
+    getMessage: (result, params) =>
+      `Updated actual cash for ${result.date} to MK ${params.body?.actualCashCollected}`,
+  })
   async updateActualCash(
     @Param('id') id: string,
-    @Body('actualCashCollected') actualCashCollected: number,
+    @Body('actualCashCollected') actualCashCollected: number | null, // ✅ Allow null
   ) {
-    return this.dailySalesService.updateActualCashCollected(id, actualCashCollected);
+    return this.dailySalesService.updateActualCashCollected(
+      id,
+      actualCashCollected,
+    );
   }
 
   // Create inventory transfer (bottle to shot)
   @Post(':id/inventory-transfer')
+  @LogActivity({
+    action: ActivityAction.TRANSFER,
+    entity: ActivityEntity.INVENTORY,
+    getMessage: (result, params) =>
+      `Created inventory transfer of ${params.body?.quantity} bottles to shots`,
+  })
   createInventoryTransfer(
     @Param('id') id: string,
     @Body() createTransferDto: CreateInventoryTransferDto,
@@ -133,6 +173,12 @@ export class DailySalesController {
   @Delete(':id')
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
+  @LogActivity({
+    action: ActivityAction.DELETE,
+    entity: ActivityEntity.DAILY_SALES,
+    getMessage: (result, params) =>
+      `Deleted daily sales record ID: ${params.params.id}`,
+  })
   remove(@Param('id') id: string) {
     return this.dailySalesService.remove(id);
   }

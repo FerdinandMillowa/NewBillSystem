@@ -20,6 +20,11 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
+import { LogActivity } from '../common/decorators/log-activity.decorator'; // ADD THIS
+import {
+  ActivityAction,
+  ActivityEntity,
+} from '../database/entities/activity-log.entity'; // ADD THIS
 
 @Controller('customers')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -29,6 +34,12 @@ export class CustomersController {
   // Create new customer (any authenticated user)
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @LogActivity({
+    action: ActivityAction.CREATE,
+    entity: ActivityEntity.CUSTOMER,
+    getMessage: (result) =>
+      `Created customer: ${result.firstName} ${result.lastName}`,
+  })
   create(@Body() createCustomerDto: CreateCustomerDto) {
     return this.customersService.create(createCustomerDto);
   }
@@ -40,7 +51,6 @@ export class CustomersController {
   }
 
   // Get customer statistics (ANY authenticated user can view)
-  // FIXED: Removed @Roles(UserRole.ADMIN) decorator
   @Get('stats')
   getCustomerStats() {
     return this.customersService.getCustomerStats();
@@ -61,6 +71,12 @@ export class CustomersController {
 
   // Update customer (any authenticated user can update)
   @Patch(':id')
+  @LogActivity({
+    action: ActivityAction.UPDATE,
+    entity: ActivityEntity.CUSTOMER,
+    getMessage: (result) =>
+      `Updated customer: ${result.firstName} ${result.lastName}`,
+  })
   update(
     @Param('id') id: string,
     @Body() updateCustomerDto: UpdateCustomerDto,
@@ -71,6 +87,12 @@ export class CustomersController {
   // Approve/reject customer (admin only)
   @Patch(':id/approve')
   @Roles(UserRole.ADMIN)
+  @LogActivity({
+    action: ActivityAction.APPROVE,
+    entity: ActivityEntity.CUSTOMER,
+    getMessage: (result) =>
+      `${result.status === 'approved' ? 'Approved' : 'Rejected'} customer: ${result.firstName} ${result.lastName}`,
+  })
   approveCustomer(
     @Param('id') id: string,
     @Body() approveCustomerDto: ApproveCustomerDto,
@@ -82,6 +104,11 @@ export class CustomersController {
   @Delete(':id')
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
+  @LogActivity({
+    action: ActivityAction.DELETE,
+    entity: ActivityEntity.CUSTOMER,
+    getMessage: (result, params) => `Deleted customer ID: ${params.params.id}`,
+  })
   remove(@Param('id') id: string) {
     return this.customersService.remove(id);
   }
