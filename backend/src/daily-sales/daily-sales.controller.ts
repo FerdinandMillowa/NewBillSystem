@@ -22,11 +22,11 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '../common/enums';
 import { User } from '../database/entities/user.entity';
-import { LogActivity } from '../common/decorators/log-activity.decorator'; // ADD THIS
+import { LogActivity } from '../common/decorators/log-activity.decorator';
 import {
   ActivityAction,
   ActivityEntity,
-} from '../database/entities/activity-log.entity'; // ADD THIS
+} from '../database/entities/activity-log.entity';
 
 @Controller('daily-sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -55,6 +55,12 @@ export class DailySalesController {
   @Get('today')
   getToday() {
     return this.dailySalesService.getToday();
+  }
+
+  // ✅ ADD THIS: Get or create draft for a specific date
+  @Get('draft/:date')
+  async getOrCreateDraft(@Param('date') date: string) {
+    return this.dailySalesService.getOrCreateDraftForDate(date);
   }
 
   // Get bills for a specific date
@@ -141,7 +147,7 @@ export class DailySalesController {
   })
   async updateActualCash(
     @Param('id') id: string,
-    @Body('actualCashCollected') actualCashCollected: number | null, // ✅ Allow null
+    @Body('actualCashCollected') actualCashCollected: number | null,
   ) {
     return this.dailySalesService.updateActualCashCollected(
       id,

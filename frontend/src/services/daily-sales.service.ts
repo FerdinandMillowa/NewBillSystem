@@ -75,8 +75,10 @@ export const dailySalesService = {
     return response.data;
   },
 
-  updateActualCashCollected(id: string, actualCashCollected: number | null) {
-    return api.patch(`/daily-sales/${id}/actual-cash`, { actualCashCollected });
+  // ✅ ADDED: Update actual cash collected
+  updateActualCashCollected: async (id: string, actualCashCollected: number | null) => {
+    const response = await api.patch(`/daily-sales/${id}/actual-cash`, { actualCashCollected });
+    return response.data;
   },
 
   // Unlock daily sales (admin only)

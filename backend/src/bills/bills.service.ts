@@ -47,7 +47,8 @@ export class BillsService {
       dailySalesId: dailySalesId || null, // ✅ Handle null correctly
     });
 
-    return this.billRepository.save(bill);
+    // ✅ FIXED: Save returns Bill, not Bill[]
+    return await this.billRepository.save(bill);
   }
 
   async findAll(queryDto: QueryBillsDto): Promise<{
@@ -95,7 +96,7 @@ export class BillsService {
   async findOne(id: string): Promise<Bill> {
     const bill = await this.billRepository.findOne({
       where: { id },
-      relations: ['customer'],
+      relations: ['customer', 'dailySales'], // ✅ Include dailySales relation
     });
 
     if (!bill) {
@@ -118,6 +119,7 @@ export class BillsService {
     return this.billRepository.find({
       where: { customerId },
       order: { createdAt: 'DESC' },
+      relations: ['dailySales'], // ✅ Include dailySales relation
     });
   }
 
@@ -200,7 +202,7 @@ export class BillsService {
 
   async getRecentBills(limit: number = 10): Promise<Bill[]> {
     return this.billRepository.find({
-      relations: ['customer'],
+      relations: ['customer', 'dailySales'], // ✅ Include dailySales relation
       order: { createdAt: 'DESC' },
       take: limit,
     });
