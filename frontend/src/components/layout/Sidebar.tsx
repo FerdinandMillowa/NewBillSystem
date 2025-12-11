@@ -14,6 +14,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CubeIcon,
+  ClockIcon,
   DocumentChartBarIcon,
 } from "@heroicons/react/24/outline";
 import clsx from "clsx";
@@ -52,6 +53,12 @@ const navigation = [
     href: "/users",
     icon: UsersIcon,
     adminOnly: true, // Only admins can access
+  },
+  {
+    name: "Activity Logs",
+    href: "/activity-logs",
+    icon: ClockIcon,
+    adminOnly: true,
   },
   { name: "Reports", href: "/reports", icon: ChartBarIcon, adminOnly: true },
   { name: "Settings", href: "/settings", icon: Cog6ToothIcon, adminOnly: true },
