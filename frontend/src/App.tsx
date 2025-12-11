@@ -18,6 +18,7 @@ import { Products } from "./pages/Products";
 import { DailySales } from "./pages/DailySales";
 import { Users } from "./pages/Users";
 import { Profile } from "./pages/Profile";
+import { ActivityLogs } from "./pages/ActivityLogs";
 
 // Create query client
 const queryClient = new QueryClient({
@@ -115,6 +116,7 @@ function App() {
                 <Route path="/daily-sales" element={<DailySales />} />
                 <Route path="/users" element={<Users />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/activity-logs" element={<ActivityLogs />} />
 
                 {/* Redirect root to Quick Actions for ALL users */}
                 <Route

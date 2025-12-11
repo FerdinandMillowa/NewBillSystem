@@ -72,13 +72,31 @@ export const DailySales = () => {
     enabled: !!selectedDate,
   });
 
+  // ✅ CRITICAL FIX: Bills query - fixed to ensure bills are always linked to Daily Sales
   const { data: billsForDate, refetch: refetchBills } = useQuery({
     queryKey: ["bills-by-date", selectedDate],
     queryFn: async () => {
-      const response = await dailySalesService.getBillsForDate(selectedDate);
-      return response || [];
+      try {
+        // ✅ CRITICAL FIX: First get or create Daily Sales for selected date
+        const dailySales = await dailySalesService.getOrCreateDraft(
+          selectedDate
+        );
+
+        // ✅ Then fetch bills linked to this Daily Sales record
+        const response = await dailySalesService.getBillsForDate(
+          selectedDate,
+          dailySales.id // Pass the dailySalesId
+        );
+
+        return response || [];
+      } catch (error) {
+        console.error("Error fetching bills:", error);
+        return [];
+      }
     },
     enabled: !!selectedDate,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   const billsAmount = (billsForDate || []).reduce(
