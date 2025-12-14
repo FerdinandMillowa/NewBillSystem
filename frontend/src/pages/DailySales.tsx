@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dailySalesService } from "../services/daily-sales.service";
 import { productsService } from "../services/products.service";
 import { productCategoriesService } from "../services/product-categories.service";
-import { billsService } from "../services/bills.service";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { DailySalesInventoryGrid } from "../components/daily-sales/DailySalesInventoryGrid";
@@ -72,22 +71,17 @@ export const DailySales = () => {
     enabled: !!selectedDate,
   });
 
-  // ✅ CRITICAL FIX: Bills query - fixed to ensure bills are always linked to Daily Sales
   const { data: billsForDate, refetch: refetchBills } = useQuery({
     queryKey: ["bills-by-date", selectedDate],
     queryFn: async () => {
       try {
-        // ✅ CRITICAL FIX: First get or create Daily Sales for selected date
         const dailySales = await dailySalesService.getOrCreateDraft(
           selectedDate
         );
-
-        // ✅ Then fetch bills linked to this Daily Sales record
         const response = await dailySalesService.getBillsForDate(
           selectedDate,
-          dailySales.id // Pass the dailySalesId
+          dailySales.id
         );
-
         return response || [];
       } catch (error) {
         console.error("Error fetching bills:", error);
@@ -206,12 +200,8 @@ export const DailySales = () => {
       billsAmount;
 
     const totalSales = totalSalesFromInventory;
-
     const totalCollected = cashAtHand + nonCashCollected;
-
-    // ✅ FIXED: Shortage should be 0 on frontend (only calculated in backend when actual cash is entered)
-    const shortage = 0; // Frontend doesn't calculate shortage
-
+    const shortage = 0;
     const netRevenue = totalSales - totalExpensesAmount;
 
     const cashExpenses = expenses
@@ -222,7 +212,7 @@ export const DailySales = () => {
       totalSales,
       totalCollected,
       totalExpenses: totalExpensesAmount,
-      shortage, // ✅ Always 0 on frontend
+      shortage,
       netRevenue,
       cashAtHand,
       cashExpenses,
@@ -310,6 +300,7 @@ export const DailySales = () => {
     },
   });
 
+  // ✅ CRITICAL FIX: Only include date when creating, not when updating
   const handleSaveDraft = () => {
     const validation = validateStockPurchases();
     if (!validation.valid) {
@@ -320,8 +311,8 @@ export const DailySales = () => {
 
     setValidationErrors([]);
 
-    const data = {
-      date: selectedDate,
+    // Build base data object WITHOUT date
+    const data: any = {
       cash: totals.cashAtHand,
       ...revenue,
       billsAmount,
@@ -332,6 +323,11 @@ export const DailySales = () => {
       stockPurchases,
       notes,
     };
+
+    // ✅ CRITICAL FIX: Only add date when creating (not updating)
+    if (!existingDailySales) {
+      data.date = selectedDate;
+    }
 
     saveMutation.mutate(data);
   };
@@ -515,7 +511,6 @@ export const DailySales = () => {
         billsAmount={billsAmount}
         isDisabled={isFinalized}
         onBillCreated={() => {
-          // ✅ CRITICAL FIX: Refetch bills immediately after creation
           refetchBills();
           queryClient.invalidateQueries({
             queryKey: ["bills-by-date", selectedDate],

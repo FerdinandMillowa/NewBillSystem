@@ -608,6 +608,10 @@ export class DailySalesService {
     const { inventories, expenses, stockPurchases, ...salesData } =
       updateDailySalesDto;
 
+    // ✅ FIX: Store the original date BEFORE removing the record
+    const originalDate = dailySales.date;
+    const dateStr = originalDate.toISOString().split('T')[0];
+
     // Store bills for later re-linking
     const existingBills = dailySales.bills || [];
 
@@ -621,7 +625,6 @@ export class DailySalesService {
       await this.stockPurchaseRepository.remove(dailySales.stockPurchases);
     }
 
-    const dateStr = dailySales.date.toISOString().split('T')[0];
     await this.dailySalesRepository.remove(dailySales);
 
     // Re-create daily sales with existing bills
