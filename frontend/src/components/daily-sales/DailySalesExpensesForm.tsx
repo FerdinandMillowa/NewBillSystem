@@ -57,7 +57,11 @@ export const DailySalesExpensesForm = ({
     onExpensesChange(newExpenses);
   };
 
-  const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  // ✅ FIX: Proper calculation with parseFloat to prevent NaN
+  const totalExpenses = expenses.reduce((sum, exp) => {
+    const amount = parseFloat(String(exp.amount)) || 0;
+    return sum + amount;
+  }, 0);
 
   return (
     <Card title="Expenses">
@@ -67,38 +71,46 @@ export const DailySalesExpensesForm = ({
           {expenses.map((expense, index) => (
             <div
               key={index}
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
             >
               <div className="flex-1 grid grid-cols-4 gap-4">
                 <div>
-                  <p className="text-xs text-gray-500">Category</p>
-                  <p className="text-sm font-medium text-gray-900 capitalize">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Category
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">
                     {expense.category.replace("_", " ")}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Description</p>
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Description
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
                     {expense.description}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Payment Method</p>
-                  <p className="text-sm font-medium text-gray-900 capitalize">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Payment Method
+                  </p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">
                     {expense.paymentMethod?.replace("_", " ")}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Amount</p>
-                  <p className="text-sm font-bold text-gray-900">
-                    {formatCurrency(expense.amount)}
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Amount
+                  </p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">
+                    {formatCurrency(parseFloat(String(expense.amount)) || 0)}
                   </p>
                 </div>
               </div>
               {!isDisabled && (
                 <button
                   onClick={() => handleRemoveExpense(index)}
-                  className="ml-4 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  className="ml-4 p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                 >
                   <TrashIcon className="w-5 h-5" />
                 </button>
@@ -106,10 +118,12 @@ export const DailySalesExpensesForm = ({
             </div>
           ))}
 
-          <div className="flex justify-end p-3 bg-gray-100 rounded-lg">
+          <div className="flex justify-end p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
             <div className="text-right">
-              <p className="text-xs text-gray-600">Total Expenses</p>
-              <p className="text-lg font-bold text-gray-900">
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                Total Expenses
+              </p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">
                 {formatCurrency(totalExpenses)}
               </p>
             </div>
@@ -119,8 +133,10 @@ export const DailySalesExpensesForm = ({
 
       {/* Add New Expense Form */}
       {!isDisabled && (
-        <div className="space-y-4 p-4 bg-blue-50 rounded-lg">
-          <h4 className="text-sm font-semibold text-gray-900">Add Expense</h4>
+        <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+            Add Expense
+          </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <label className="label text-xs">Category</label>

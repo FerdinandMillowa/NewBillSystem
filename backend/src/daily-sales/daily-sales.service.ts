@@ -37,53 +37,29 @@ export class DailySalesService {
     private billRepository: Repository<Bill>,
   ) {}
 
-  // ✅ FIXED: Get or create draft daily sales for a date
   async getOrCreateDraftForDate(date: string): Promise<DailySales> {
     const targetDate = new Date(date);
     targetDate.setHours(0, 0, 0, 0);
 
-    // Try to find existing record
     let dailySales = await this.dailySalesRepository.findOne({
       where: { date: targetDate },
       relations: ['inventories', 'expenses', 'stockPurchases', 'bills'],
     });
 
-    // If exists, return it
     if (dailySales) {
       return dailySales;
     }
 
-    // If doesn't exist, create a minimal draft
-    // Get all active products for initialization
     const products = await this.productRepository.find({
       where: { isActive: true },
     });
 
-    // ✅ CRITICAL FIX: Fetch existing bills for this date
-    const billsForDate = await this.billRepository.find({
-      where: {
-        createdAt: Between(
-          new Date(date + 'T00:00:00'),
-          new Date(date + 'T23:59:59'),
-        ),
-        dailySalesId: IsNull(),
-      },
-      relations: ['customer'],
-    });
-
-    // ✅ CRITICAL FIX: Calculate bills amount
-    const billsAmount = billsForDate.reduce(
-      (sum, bill) => sum + parseFloat(bill.amount?.toString() || '0'),
-      0,
-    );
-
-    // Create draft with minimal data - bypassing normal create method to avoid conflict check
     const dailySalesEntity = this.dailySalesRepository.create({
       date: targetDate,
       status: 'draft',
       totalSales: 0,
       totalCollected: 0,
-      billsAmount, // ✅ Include existing bills amount
+      billsAmount: 0,
       totalExpenses: 0,
       cashExpenses: 0,
       netRevenue: 0,
@@ -97,7 +73,6 @@ export class DailySalesService {
 
     dailySales = await this.dailySalesRepository.save(dailySalesEntity);
 
-    // Create inventory records
     const inventoryRecords: DailyInventory[] = [];
     for (const product of products) {
       inventoryRecords.push(
@@ -118,15 +93,6 @@ export class DailySalesService {
       await this.dailyInventoryRepository.save(inventoryRecords);
     }
 
-    // ✅ CRITICAL FIX: Link existing bills to this daily sales record
-    if (billsForDate.length > 0) {
-      for (const bill of billsForDate) {
-        bill.dailySalesId = dailySales.id;
-      }
-      await this.billRepository.save(billsForDate);
-    }
-
-    // Reload with relations
     return this.findOne(dailySales.id);
   }
 
@@ -140,7 +106,6 @@ export class DailySalesService {
       ...salesData
     } = createDailySalesDto;
 
-    // Check if daily sales already exists for this date
     const existingSales = await this.dailySalesRepository.findOne({
       where: { date: new Date(date) },
     });
@@ -151,28 +116,11 @@ export class DailySalesService {
       );
     }
 
-    // Check if previous day is finalized (sequential validation)
     await this.validateSequentialFinalization(new Date(date));
 
-    // Fetch bills for this date
-    const billsForDate = await this.billRepository.find({
-      where: {
-        createdAt: Between(
-          new Date(date + 'T00:00:00'),
-          new Date(date + 'T23:59:59'),
-        ),
-        dailySalesId: IsNull(),
-      },
-      relations: ['customer'],
-    });
+    // Bills will only be linked when explicitly created from Daily Sales page
+    const billsAmount = 0;
 
-    // Calculate bills amount
-    const billsAmount = billsForDate.reduce(
-      (sum, bill) => sum + parseFloat(bill.amount?.toString() || '0'),
-      0,
-    );
-
-    // Process stock purchases and validate Stock In
     const purchasedProducts = new Map<string, number>();
 
     if (stockPurchases && stockPurchases.length > 0) {
@@ -196,7 +144,6 @@ export class DailySalesService {
       }
     }
 
-    // Validate Stock In with Stock Purchases
     for (const invItem of inventories) {
       const stockIn = invItem.stockIn || 0;
       const purchased = purchasedProducts.get(invItem.productId) || 0;
@@ -220,7 +167,6 @@ export class DailySalesService {
       }
     }
 
-    // Process inventory items and calculate total sales FROM INVENTORY ONLY
     let totalSalesFromInventory = 0;
     const inventoryRecords: DailyInventory[] = [];
 
@@ -258,15 +204,12 @@ export class DailySalesService {
         }),
       );
 
-      // Update product current stock to closing stock
       product.currentStock = invItem.closingStock;
       await this.productRepository.save(product);
     }
 
-    // ✅ FIX: Total Sales = Inventory Sales ONLY (no bills)
     const totalSales = totalSalesFromInventory;
 
-    // Process expenses correctly
     let totalExpenses = 0;
     let cashExpenses = 0;
     const expenseRecords: DailyExpense[] = [];
@@ -292,7 +235,6 @@ export class DailySalesService {
       }
     }
 
-    // Process stock purchases records
     let totalStockPurchases = 0;
     const stockPurchaseRecords: StockPurchase[] = [];
 
@@ -317,51 +259,40 @@ export class DailySalesService {
       }
     }
 
-    // Parse revenue collections
     const airtelMoney = parseFloat(String(salesData.airtelMoney)) || 0;
     const mpamba = parseFloat(String(salesData.mpamba)) || 0;
     const bank = parseFloat(String(salesData.bank)) || 0;
     const nonCashCollected = airtelMoney + mpamba + bank;
 
-    // ✅ CRITICAL FIX: Cash at Hand Calculation (INCLUDES BILLS)
     const cashAtHand =
       totalSalesFromInventory - totalExpenses - nonCashCollected - billsAmount;
 
-    // Total collected = Cash + Other payment methods (NOT including bills)
     const totalCollected = cashAtHand + nonCashCollected;
 
-    // ✅ CRITICAL FIX: Actual Cash Collected (optional, manager input)
-    // IMPORTANT: Check if actualCashCollected is explicitly provided AND not undefined/null
     let actualCash: number | null = null;
     if (actualCashCollected !== undefined && actualCashCollected !== null) {
       actualCash = parseFloat(String(actualCashCollected));
     }
 
-    // ✅ CRITICAL FIX: Shortage ONLY calculated if manager entered actual cash
-    // Logic:
-    // 1. If actualCash is null (not entered) → shortage = 0 (not calculated)
-    // 2. If actualCash is provided → shortage = cashAtHand - actualCash (if positive)
     let shortage = 0;
     if (actualCash !== null) {
       const difference = cashAtHand - actualCash;
-      shortage = difference > 0 ? difference : 0; // Only positive shortages
+      shortage = difference > 0 ? difference : 0;
     }
 
-    // Net revenue = Total Sales - Expenses
     const netRevenue = totalSales - totalExpenses;
 
-    // Create daily sales record
     const dailySales = this.dailySalesRepository.create({
       date: new Date(date),
-      cash: cashAtHand, // System-calculated expected cash
+      cash: cashAtHand,
       airtelMoney,
       mpamba,
       bank,
       totalCollected,
-      totalSales, // ✅ Inventory sales only
-      billsAmount, // ✅ Credit sales (tracked separately)
-      actualCashCollected: actualCash, // ✅ null if not entered
-      shortage, // ✅ 0 if actualCash is null, otherwise calculated
+      totalSales,
+      billsAmount,
+      actualCashCollected: actualCash,
+      shortage,
       totalExpenses,
       cashExpenses,
       netRevenue,
@@ -373,7 +304,6 @@ export class DailySalesService {
 
     const savedSales = await this.dailySalesRepository.save(dailySales);
 
-    // Save related records
     try {
       if (inventoryRecords.length > 0) {
         for (const inv of inventoryRecords) {
@@ -395,14 +325,6 @@ export class DailySalesService {
         }
         await this.stockPurchaseRepository.save(stockPurchaseRecords);
       }
-
-      // Link bills to this daily sales record
-      if (billsForDate.length > 0) {
-        for (const bill of billsForDate) {
-          bill.dailySalesId = savedSales.id;
-        }
-        await this.billRepository.save(billsForDate);
-      }
     } catch (error) {
       await this.dailySalesRepository.remove(savedSales);
       throw error;
@@ -411,7 +333,6 @@ export class DailySalesService {
     return this.findOne(savedSales.id);
   }
 
-  // ✅ CRITICAL FIX: Method to update actual cash collected (manager/admin only)
   async updateActualCashCollected(
     id: string,
     actualCashCollected: number | null,
@@ -430,18 +351,15 @@ export class DailySalesService {
       );
     }
 
-    // ✅ CRITICAL FIX: Handle null/undefined correctly
     let actualCash: number | null = null;
     let shortage = 0;
 
-    // Only calculate shortage if actualCashCollected is explicitly provided
     if (actualCashCollected !== undefined && actualCashCollected !== null) {
       actualCash = parseFloat(String(actualCashCollected));
       const cashAtHand = parseFloat(String(dailySales.cashAtHand)) || 0;
 
-      // Calculate shortage: Expected - Actual
       const difference = cashAtHand - actualCash;
-      shortage = difference > 0 ? difference : 0; // Only positive shortages
+      shortage = difference > 0 ? difference : 0;
     }
 
     dailySales.actualCashCollected = actualCash;
@@ -608,12 +526,22 @@ export class DailySalesService {
     const { inventories, expenses, stockPurchases, ...salesData } =
       updateDailySalesDto;
 
-    // ✅ FIX: Store the original date BEFORE removing the record
-    const originalDate = dailySales.date;
-    const dateStr = originalDate.toISOString().split('T')[0];
+    const targetDate = new Date(dailySales.date);
+    const billsForDate = await this.billRepository.find({
+      where: {
+        createdAt: Between(
+          new Date(targetDate.toISOString().split('T')[0] + 'T00:00:00'),
+          new Date(targetDate.toISOString().split('T')[0] + 'T23:59:59'),
+        ),
+        dailySalesId: id,
+      },
+      relations: ['customer'],
+    });
 
-    // Store bills for later re-linking
-    const existingBills = dailySales.bills || [];
+    const billsAmount = billsForDate.reduce(
+      (sum, bill) => sum + parseFloat(bill.amount?.toString() || '0'),
+      0,
+    );
 
     if (dailySales.inventories?.length > 0) {
       await this.dailyInventoryRepository.remove(dailySales.inventories);
@@ -625,26 +553,156 @@ export class DailySalesService {
       await this.stockPurchaseRepository.remove(dailySales.stockPurchases);
     }
 
-    await this.dailySalesRepository.remove(dailySales);
+    let totalSalesFromInventory = 0;
+    const inventoryRecords: DailyInventory[] = [];
 
-    // Re-create daily sales with existing bills
-    const newDailySales = await this.create({
-      date: dateStr,
-      inventories: inventories || [],
-      expenses: expenses || [],
-      stockPurchases: stockPurchases || [],
-      ...salesData,
-    });
+    if (inventories && inventories.length > 0) {
+      for (const invItem of inventories) {
+        const product = await this.productRepository.findOne({
+          where: { id: invItem.productId },
+        });
 
-    // Re-link bills
-    if (existingBills.length > 0) {
-      for (const bill of existingBills) {
-        bill.dailySalesId = newDailySales.id;
+        if (!product) {
+          throw new NotFoundException(`Product ${invItem.productId} not found`);
+        }
+
+        const actualStockIn = invItem.stockIn || 0;
+        const soldQuantity =
+          invItem.openingStock + actualStockIn - invItem.closingStock;
+
+        if (soldQuantity < 0) {
+          throw new BadRequestException(
+            `Invalid inventory for ${product.name}. Sold quantity cannot be negative.`,
+          );
+        }
+
+        const revenue = soldQuantity * product.currentPrice;
+        totalSalesFromInventory += revenue;
+
+        inventoryRecords.push(
+          this.dailyInventoryRepository.create({
+            dailySalesId: id,
+            productId: invItem.productId,
+            openingStock: invItem.openingStock,
+            stockIn: actualStockIn,
+            closingStock: invItem.closingStock,
+            soldQuantity,
+            productPrice: product.currentPrice,
+            revenue,
+          }),
+        );
+
+        product.currentStock = invItem.closingStock;
+        await this.productRepository.save(product);
       }
-      await this.billRepository.save(existingBills);
     }
 
-    return this.findOne(newDailySales.id);
+    const totalSales = totalSalesFromInventory;
+
+    let totalExpenses = 0;
+    let cashExpenses = 0;
+    const expenseRecords: DailyExpense[] = [];
+
+    if (expenses && expenses.length > 0) {
+      for (const expItem of expenses) {
+        const paymentMethod = expItem.paymentMethod || 'cash';
+        const amount = parseFloat(String(expItem.amount)) || 0;
+        totalExpenses += amount;
+
+        if (paymentMethod === 'cash') {
+          cashExpenses += amount;
+        }
+
+        expenseRecords.push(
+          this.dailyExpenseRepository.create({
+            dailySalesId: id,
+            category: expItem.category as any,
+            description: expItem.description,
+            amount,
+            paymentMethod: paymentMethod as any,
+          }),
+        );
+      }
+    }
+
+    let totalStockPurchases = 0;
+    const stockPurchaseRecords: StockPurchase[] = [];
+
+    if (stockPurchases && stockPurchases.length > 0) {
+      for (const purchaseItem of stockPurchases) {
+        const quantity = parseFloat(String(purchaseItem.quantity)) || 0;
+        const unitCost = parseFloat(String(purchaseItem.unitCost)) || 0;
+        const totalCost = quantity * unitCost;
+        totalStockPurchases += totalCost;
+
+        stockPurchaseRecords.push(
+          this.stockPurchaseRepository.create({
+            dailySalesId: id,
+            productId: purchaseItem.productId,
+            quantity,
+            unitCost,
+            totalCost,
+            paymentMethod: purchaseItem.paymentMethod as any,
+            supplier: purchaseItem.supplier,
+            notes: purchaseItem.notes,
+          }),
+        );
+      }
+    }
+
+    const airtelMoney = parseFloat(String(salesData.airtelMoney)) || 0;
+    const mpamba = parseFloat(String(salesData.mpamba)) || 0;
+    const bank = parseFloat(String(salesData.bank)) || 0;
+    const nonCashCollected = airtelMoney + mpamba + bank;
+
+    const cashAtHand =
+      totalSalesFromInventory - totalExpenses - nonCashCollected - billsAmount;
+
+    const totalCollected = cashAtHand + nonCashCollected;
+
+    let actualCash: number | null = null;
+    if (salesData.actualCashCollected !== undefined && salesData.actualCashCollected !== null) {
+      actualCash = parseFloat(String(salesData.actualCashCollected));
+    }
+
+    let shortage = 0;
+    if (actualCash !== null) {
+      shortage = cashAtHand - actualCash;
+    }
+
+    const netRevenue = totalSales - totalExpenses;
+
+    Object.assign(dailySales, {
+      cash: cashAtHand,
+      airtelMoney,
+      mpamba,
+      bank,
+      totalCollected,
+      totalSales,
+      billsAmount,
+      actualCashCollected: actualCash,
+      shortage,
+      totalExpenses,
+      cashExpenses,
+      netRevenue,
+      cashAtHand,
+      totalStockPurchases,
+      notes: salesData.notes,
+    });
+
+    await this.dailySalesRepository.save(dailySales);
+
+    if (inventoryRecords.length > 0) {
+      await this.dailyInventoryRepository.save(inventoryRecords);
+    }
+    if (expenseRecords.length > 0) {
+      await this.dailyExpenseRepository.save(expenseRecords);
+    }
+    if (stockPurchaseRecords.length > 0) {
+      await this.stockPurchaseRepository.save(stockPurchaseRecords);
+    }
+
+    return this.findOne(id);
   }
 
   async finalize(id: string): Promise<DailySales> {

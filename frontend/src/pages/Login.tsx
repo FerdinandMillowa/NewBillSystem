@@ -76,9 +76,7 @@ export const Login = () => {
                 }}
               />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Bill Management
-            </h1>
+            <h1 className="text-3xl font-bold text-gray-900">Bar Management</h1>
             <p className="text-gray-600 mt-2">Sign in to your account</p>
           </div>
 
