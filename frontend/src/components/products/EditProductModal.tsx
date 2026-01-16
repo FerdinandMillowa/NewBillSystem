@@ -1,7 +1,7 @@
 import { Fragment, useEffect } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { useForm } from "react-hook-form";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { productsService } from "../../services/products.service";
 import type {
   UpdateProductDto,
@@ -28,12 +28,21 @@ export const EditProductModal = ({
 }: EditProductModalProps) => {
   const queryClient = useQueryClient();
 
+  // Fetch all products to populate the "Link to Shot Product" dropdown
+  const { data: productsData } = useQuery({
+    queryKey: ["products-all-linking"],
+    queryFn: () => productsService.getAll({ limit: 1000, isActive: true }),
+    enabled: isOpen && product.unit === "bottle",
+  });
+
+  const allProducts = productsData?.products || [];
+
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<UpdateProductDto>({
+  } = useForm<UpdateProductDto & { linkedShotProductId?: string }>({
     defaultValues: {
       categoryId: product.categoryId,
       name: product.name,
@@ -42,6 +51,7 @@ export const EditProductModal = ({
       currentPrice: product.currentPrice,
       currentStock: product.currentStock,
       shotsPerBottle: product.shotsPerBottle || undefined,
+      linkedShotProductId: product.linkedShotProductId || "", // Added field
       notes: product.notes || "",
       isActive: product.isActive,
     },
@@ -56,6 +66,7 @@ export const EditProductModal = ({
       currentPrice: product.currentPrice,
       currentStock: product.currentStock,
       shotsPerBottle: product.shotsPerBottle || undefined,
+      linkedShotProductId: product.linkedShotProductId || "", // Added field
       notes: product.notes || "",
       isActive: product.isActive,
     });
@@ -75,7 +86,9 @@ export const EditProductModal = ({
     },
   });
 
-  const onSubmit = (data: UpdateProductDto) => {
+  const onSubmit = (
+    data: UpdateProductDto & { linkedShotProductId?: string }
+  ) => {
     updateMutation.mutate({
       ...data,
       currentPrice: Number(data.currentPrice),
@@ -83,6 +96,8 @@ export const EditProductModal = ({
       shotsPerBottle: data.shotsPerBottle
         ? Number(data.shotsPerBottle)
         : undefined,
+      // Ensure empty string is converted back to undefined for the API
+      linkedShotProductId: data.linkedShotProductId || undefined,
     });
   };
 
@@ -195,16 +210,75 @@ export const EditProductModal = ({
                     </div>
                   </div>
 
-                  {/* Shots Per Bottle */}
-                  <div>
-                    <label className="label">Shots Per Bottle</label>
-                    <Input
-                      type="number"
-                      {...register("shotsPerBottle", {
-                        min: { value: 1, message: "Must be at least 1" },
-                      })}
-                    />
-                  </div>
+                  {/* ✅ Bottle-to-Shot Conversion Setup Section */}
+                  {product.unit === "bottle" && (
+                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
+                        🔄 Bottle-to-Shot Conversion Setup
+                      </h4>
+
+                      {/* Shots Per Bottle */}
+                      <div className="mb-3">
+                        <label className="label">Shots Per Bottle</label>
+                        <Input
+                          type="number"
+                          {...register("shotsPerBottle", {
+                            min: { value: 1, message: "Must be at least 1" },
+                          })}
+                          placeholder="e.g., 25 (for 750ml bottle)"
+                        />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          How many shots can be poured from this bottle?
+                        </p>
+                      </div>
+
+                      {/* Linked Shot Product */}
+                      <div>
+                        <label className="label">Link to Shot Product</label>
+                        <select
+                          {...register("linkedShotProductId")}
+                          className="input"
+                        >
+                          <option value="">-- Select Shot Product --</option>
+                          {categories
+                            .filter(
+                              (cat) =>
+                                cat.name.toLowerCase().includes("shot") ||
+                                cat.name.toLowerCase().includes("drink")
+                            )
+                            .flatMap((cat) => {
+                              const shotProducts = allProducts.filter(
+                                (p) =>
+                                  p.categoryId === cat.id && p.unit === "shot"
+                              );
+                              return shotProducts;
+                            })
+                            .map((shotProduct) => (
+                              <option
+                                key={shotProduct.id}
+                                value={shotProduct.id}
+                              >
+                                {shotProduct.name} (
+                                {shotProduct.category?.name || "Uncategorized"})
+                              </option>
+                            ))}
+                        </select>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Select the shot product this bottle converts to
+                        </p>
+                      </div>
+
+                      {/* Current Link Status */}
+                      {product.linkedShotProductId && (
+                        <div className="mt-3 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-sm text-green-800 dark:text-green-200">
+                          ✅ Currently linked to:{" "}
+                          {allProducts.find(
+                            (p) => p.id === product.linkedShotProductId
+                          )?.name || "Unknown"}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Active Status */}
                   <div className="flex items-center">

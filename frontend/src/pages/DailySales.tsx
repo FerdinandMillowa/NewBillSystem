@@ -24,291 +24,79 @@ import {
   ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { format } from "date-fns";
-import type {
-  DailyInventoryItem,
-  DailyExpenseItem,
-  StockPurchaseItem,
-  Product,
-} from "../types/daily-sales.types";
+import type { DailyInventoryItem, Product } from "../types/product.types";
+import { BottleSelectionModal } from "../components/daily-sales/BottleSelectionModal";
 import { BottleConversionModal } from "../components/daily-sales/BottleConversionModal";
 
 export const DailySales = () => {
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState(
-    format(new Date(), "yyyy-MM-dd")
+    new Date().toISOString().split("T")[0]
   );
-  const [showPreviousDayWarning, setShowPreviousDayWarning] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
-
-  // Form state
   const [inventories, setInventories] = useState<DailyInventoryItem[]>([]);
-  const [revenue, setRevenue] = useState({
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [stockPurchases, setStockPurchases] = useState<any[]>([]);
+  const [notes, setNotes] = useState("");
+  const [revenueData, setRevenueData] = useState({
     airtelMoney: 0,
     mpamba: 0,
     bank: 0,
   });
-  const [expenses, setExpenses] = useState<DailyExpenseItem[]>([]);
-  const [stockPurchases, setStockPurchases] = useState<StockPurchaseItem[]>([]);
-  const [notes, setNotes] = useState("");
-  const [convertingProduct, setConvertingProduct] = useState<Product | null>(
-    null
-  );
-  const [inventoryTransfers, setInventoryTransfers] = useState<any[]>([]);
 
+  // Modal States
+  const [showBottleSelection, setShowBottleSelection] = useState(false);
+  const [selectedBottle, setSelectedBottle] = useState<Product | null>(null);
+
+  // Fetch product categories
   const { data: categories } = useQuery({
     queryKey: ["product-categories"],
     queryFn: () => productCategoriesService.getAll(),
   });
 
+  // Fetch daily sales record for the selected date
+  const {
+    data: existingDailySales,
+    isLoading: isSalesLoading,
+    refetch: refetchSales,
+  } = useQuery({
+    queryKey: ["daily-sales-by-date", selectedDate],
+    queryFn: () => dailySalesService.getOrCreateDraft(selectedDate),
+  });
+
+  // Fetch active products for initialization
   const { data: productsData } = useQuery({
     queryKey: ["products-for-daily-sales"],
-    queryFn: () =>
-      productsService.getAll({
-        isActive: true,
-        limit: 500,
-      }),
+    queryFn: () => productsService.getAll({ isActive: true, limit: 100 }),
   });
 
-  const { data: existingDailySales, isLoading: isLoadingExisting } = useQuery({
-    queryKey: ["daily-sales-by-date", selectedDate],
-    queryFn: () => dailySalesService.getByDate(selectedDate),
-    retry: false,
-    enabled: !!selectedDate,
-  });
+  const isFinalized = existingDailySales?.status === "finalized";
 
-  const { data: billsForDate, refetch: refetchBills } = useQuery({
-    queryKey: ["bills-by-date", selectedDate],
-    queryFn: async () => {
-      try {
-        const dailySales = await dailySalesService.getOrCreateDraft(
-          selectedDate
-        );
-        const response = await dailySalesService.getBillsForDate(
-          selectedDate,
-          dailySales.id
-        );
-        return response || [];
-      } catch (error) {
-        console.error("Error fetching bills:", error);
-        return [];
-      }
-    },
-    enabled: !!selectedDate,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
-  });
-
-  const billsAmount = (billsForDate || []).reduce(
-    (sum: number, bill: any) => sum + parseFloat(bill.amount || 0),
-    0
-  );
-
+  // Initialize form when daily sales record is fetched
   useEffect(() => {
     if (existingDailySales) {
       setInventories(
-        existingDailySales.inventories.map((inv) => ({
+        existingDailySales.inventories.map((inv: any) => ({
           productId: inv.productId,
           openingStock: inv.openingStock,
           stockIn: inv.stockIn,
           closingStock: inv.closingStock,
+          soldQuantity: inv.soldQuantity,
+          productName: inv.product?.name,
+          unit: inv.product?.unit,
+          categoryId: inv.product?.categoryId,
         }))
       );
-      setRevenue({
+      setExpenses(existingDailySales.expenses || []);
+      setStockPurchases(existingDailySales.stockPurchases || []);
+      setNotes(existingDailySales.notes || "");
+      setRevenueData({
         airtelMoney: Number(existingDailySales.airtelMoney) || 0,
         mpamba: Number(existingDailySales.mpamba) || 0,
         bank: Number(existingDailySales.bank) || 0,
       });
-      setExpenses(existingDailySales.expenses || []);
-      setStockPurchases(existingDailySales.stockPurchases || []);
-      setNotes(existingDailySales.notes || "");
-    } else if (productsData?.products) {
-      const initialInventories = productsData.products.map((product) => ({
-        productId: product.id,
-        openingStock: product.currentStock,
-        stockIn: 0,
-        closingStock: product.currentStock,
-      }));
-      setInventories(initialInventories);
-      setRevenue({ airtelMoney: 0, mpamba: 0, bank: 0 });
-      setExpenses([]);
-      setStockPurchases([]);
-      setNotes("");
     }
-  }, [existingDailySales, productsData]);
-
-  const validateStockPurchases = (): { valid: boolean; errors: string[] } => {
-    const errors: string[] = [];
-
-    inventories.forEach((inv) => {
-      const stockIn = inv.stockIn || 0;
-
-      if (stockIn > 0) {
-        const purchase = stockPurchases.find(
-          (p) => p.productId === inv.productId
-        );
-
-        if (!purchase || purchase.quantity === 0) {
-          const product = productsData?.products.find(
-            (p) => p.id === inv.productId
-          );
-          errors.push(
-            `Stock In entered for "${product?.name}" but no Stock Purchase recorded.`
-          );
-        } else if (purchase.quantity !== stockIn) {
-          const product = productsData?.products.find(
-            (p) => p.id === inv.productId
-          );
-          errors.push(
-            `Stock In (${stockIn}) doesn't match Stock Purchase (${purchase.quantity}) for "${product?.name}".`
-          );
-        }
-      }
-    });
-
-    return {
-      valid: errors.length === 0,
-      errors,
-    };
-  };
-
-  const calculateTotals = () => {
-    let totalSalesFromInventory = 0;
-
-    if (productsData?.products && inventories.length > 0) {
-      inventories.forEach((inv) => {
-        const product = productsData.products.find(
-          (p) => p.id === inv.productId
-        );
-        if (product) {
-          const soldQuantity =
-            inv.openingStock + inv.stockIn - inv.closingStock;
-          const revenue = soldQuantity * product.currentPrice;
-          totalSalesFromInventory += revenue;
-        }
-      });
-    }
-
-    const airtelMoney = parseFloat(String(revenue.airtelMoney)) || 0;
-    const mpamba = parseFloat(String(revenue.mpamba)) || 0;
-    const bank = parseFloat(String(revenue.bank)) || 0;
-    const nonCashCollected = airtelMoney + mpamba + bank;
-
-    const totalExpensesAmount = expenses.reduce(
-      (sum, exp) => sum + (parseFloat(String(exp.amount)) || 0),
-      0
-    );
-
-    const cashAtHand =
-      totalSalesFromInventory -
-      totalExpensesAmount -
-      nonCashCollected -
-      billsAmount;
-
-    const totalSales = totalSalesFromInventory;
-    const totalCollected = cashAtHand + nonCashCollected;
-    const shortage = 0;
-    const netRevenue = totalSales - totalExpensesAmount;
-
-    const cashExpenses = expenses
-      .filter((exp) => exp.paymentMethod === "cash")
-      .reduce((sum, exp) => sum + (parseFloat(String(exp.amount)) || 0), 0);
-
-    return {
-      totalSales,
-      totalCollected,
-      totalExpenses: totalExpensesAmount,
-      shortage,
-      netRevenue,
-      cashAtHand,
-      cashExpenses,
-      totalSalesFromInventory,
-    };
-  };
-
-  const totals = calculateTotals();
-
-  useEffect(() => {
-    if (stockPurchases.length > 0) {
-      const updatedInventories = [...inventories];
-
-      stockPurchases.forEach((purchase) => {
-        const invIndex = updatedInventories.findIndex(
-          (inv) => inv.productId === purchase.productId
-        );
-
-        if (invIndex !== -1) {
-          if (updatedInventories[invIndex].stockIn === 0) {
-            updatedInventories[invIndex] = {
-              ...updatedInventories[invIndex],
-              stockIn: purchase.quantity,
-            };
-          }
-        }
-      });
-
-      setInventories(updatedInventories);
-    }
-  }, [inventories, stockPurchases]);
-
-  const saveMutation = useMutation({
-    mutationFn: async (data: any) => {
-      if (existingDailySales) {
-        return dailySalesService.update(existingDailySales.id, data);
-      } else {
-        return dailySalesService.create(data);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["daily-sales-by-date"] });
-      queryClient.invalidateQueries({ queryKey: ["daily-sales"] });
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-      setValidationErrors([]);
-      toast.success("Daily sales saved successfully!");
-    },
-    onError: (error: any) => {
-      const message =
-        error.response?.data?.message || "Failed to save daily sales";
-
-      if (message.includes("not finalized")) {
-        setShowPreviousDayWarning(true);
-      }
-
-      toast.error(message);
-    },
-  });
-
-  const finalizeMutation = useMutation({
-    mutationFn: (id: string) => dailySalesService.finalize(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["daily-sales-by-date"] });
-      queryClient.invalidateQueries({ queryKey: ["daily-sales"] });
-      toast.success("Daily sales finalized!");
-    },
-    onError: (error: any) => {
-      toast.error(
-        error.response?.data?.message || "Failed to finalize daily sales"
-      );
-    },
-  });
-
-  const unlockMutation = useMutation({
-    mutationFn: (id: string) => dailySalesService.unlock(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["daily-sales-by-date"] });
-      queryClient.invalidateQueries({ queryKey: ["daily-sales"] });
-      toast.success("Daily sales unlocked! You can now edit it.");
-    },
-    onError: (error: any) => {
-      toast.error(
-        error.response?.data?.message || "Failed to unlock daily sales"
-      );
-    },
-  });
-
-  const handleConvertBottle = (product: Product) => {
-    setConvertingProduct(product);
-  };
+  }, [existingDailySales]);
 
   const transferMutation = useMutation({
     mutationFn: async (data: {
@@ -325,357 +113,248 @@ export const DailySales = () => {
         data
       );
     },
-    onSuccess: (transfer) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["daily-sales-by-date"] });
       queryClient.invalidateQueries({ queryKey: ["products-for-daily-sales"] });
-      setInventoryTransfers([...inventoryTransfers, transfer]);
-      toast.success(`Converted ${transfer.quantity} bottles to shots!`);
+      toast.success("Bottle converted successfully!");
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to convert bottles");
+      toast.error(error.response?.data?.message || "Failed to convert bottle");
     },
   });
 
-  const renderTransferHistory = () => {
-    if (
-      inventoryTransfers.length === 0 &&
-      existingDailySales?.inventoryTransfers?.length === 0
-    ) {
-      return null;
-    }
+  const saveMutation = useMutation({
+    mutationFn: (data: any) =>
+      dailySalesService.update(existingDailySales!.id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["daily-sales-by-date"] });
+      toast.success("Daily sales saved successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(
+        error.response?.data?.message || "Failed to save daily sales"
+      );
+    },
+  });
 
-    const transfers = [
-      ...inventoryTransfers,
-      ...(existingDailySales?.inventoryTransfers || []),
-    ];
+  const finalizeMutation = useMutation({
+    mutationFn: () => dailySalesService.finalize(existingDailySales!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["daily-sales-by-date"] });
+      toast.success("Daily sales finalized and inventory updated!");
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to finalize sales");
+    },
+  });
 
-    return (
-      <Card title="Bottle to Shot Conversions">
-        <div className="space-y-3">
-          {transfers.map((transfer) => (
-            <div
-              key={transfer.id}
-              className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg"
-            >
-              <div>
-                <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
-                  {transfer.fromProduct?.name} → {transfer.toProduct?.name}
-                </p>
-                <p className="text-sm text-purple-600 dark:text-purple-400">
-                  {transfer.quantity} bottle(s) = {transfer.resultingQuantity}{" "}
-                  shots
-                </p>
-              </div>
-              <ArrowPathIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-            </div>
-          ))}
-        </div>
-      </Card>
-    );
-  };
+  const unlockMutation = useMutation({
+    mutationFn: () => dailySalesService.unlock(existingDailySales!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["daily-sales-by-date"] });
+      toast.success("Daily sales unlocked for editing");
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to unlock sales");
+    },
+  });
 
-  const handleSaveDraft = () => {
-    const validation = validateStockPurchases();
-    if (!validation.valid) {
-      setValidationErrors(validation.errors);
-      toast.error("Please fix validation errors before saving");
-      return;
-    }
-
-    setValidationErrors([]);
-
-    const data: any = {
-      cash: totals.cashAtHand,
-      ...revenue,
-      billsAmount,
-      inventories: inventories.filter((inv) => {
-        return inv.openingStock > 0 || inv.stockIn > 0 || inv.closingStock > 0;
-      }),
+  const handleSave = () => {
+    if (!existingDailySales) return;
+    saveMutation.mutate({
+      inventories,
       expenses,
       stockPurchases,
       notes,
-    };
-
-    if (!existingDailySales) {
-      data.date = selectedDate;
-    }
-
-    saveMutation.mutate(data);
+      ...revenueData,
+    });
   };
 
   const handleFinalize = () => {
-    if (!existingDailySales) {
-      toast.error("Please save the daily sales first");
-      return;
-    }
-
-    const validation = validateStockPurchases();
-    if (!validation.valid) {
-      setValidationErrors(validation.errors);
-      toast.error("Please fix validation errors before finalizing");
-      return;
-    }
-
-    setValidationErrors([]);
-
+    if (!existingDailySales) return;
     if (
       window.confirm(
-        "Are you sure you want to finalize this daily sales? You won't be able to edit it afterwards without admin approval."
+        "Are you sure you want to finalize? This will lock the record and update master inventory."
       )
     ) {
-      finalizeMutation.mutate(existingDailySales.id);
+      finalizeMutation.mutate();
     }
   };
 
   const handleUnlock = () => {
-    if (!existingDailySales) return;
-
-    if (
-      window.confirm(
-        "Are you sure you want to unlock this finalized daily sales? This will allow editing again."
-      )
-    ) {
-      unlockMutation.mutate(existingDailySales.id);
+    if (!isAdmin) return;
+    if (window.confirm("Admin: Unlock this record for editing?")) {
+      unlockMutation.mutate();
     }
   };
 
-  const isFinalized = existingDailySales?.status === "finalized";
+  const handleConvertClick = () => {
+    setShowBottleSelection(true);
+  };
+
+  const handleBottleSelect = (bottleProduct: Product) => {
+    setSelectedBottle(bottleProduct);
+    setShowBottleSelection(false);
+  };
+
+  const bottleProducts =
+    productsData?.products.filter((p) => p.unit === "bottle") || [];
+
+  if (isSalesLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 pb-20">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Daily Sales Entry
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Record today's inventory, revenue, and expenses
+          <h1 className="text-3xl font-bold text-gray-900">Daily Sales</h1>
+          <p className="text-gray-600 mt-1">
+            Record inventory and sales for{" "}
+            {format(new Date(selectedDate), "PPPP")}
           </p>
         </div>
         <div className="flex items-center space-x-3">
-          {existingDailySales && (
-            <>
-              <div className="flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                {isFinalized ? (
-                  <>
-                    <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
-                    <span className="text-sm font-medium text-green-600 dark:text-green-400">
-                      Finalized
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <DocumentCheckIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-                    <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">
-                      Draft
-                    </span>
-                  </>
-                )}
-              </div>
-              {isFinalized && isAdmin && (
-                <>
-                  <Button
-                    variant="secondary"
-                    onClick={handleUnlock}
-                    isLoading={unlockMutation.isPending}
-                    className="flex items-center"
-                  >
-                    <LockOpenIcon className="w-5 h-5 mr-2" />
-                    Unlock
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      unlockMutation.mutate(existingDailySales.id);
-                    }}
-                    className="flex items-center"
-                  >
-                    <PencilIcon className="w-5 h-5 mr-2" />
-                    Edit (Admin)
-                  </Button>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {showPreviousDayWarning && (
-        <Card className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
-          <div className="flex items-start">
-            <ExclamationTriangleIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-400 mr-3 flex-shrink-0" />
-            <div className="flex-1">
-              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                Previous Day Not Finalized
-              </h3>
-              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                The previous day's sales have not been finalized. Please
-                finalize the previous day before entering sales for this date to
-                maintain sequential data integrity.
-              </p>
-              <button
-                onClick={() => setShowPreviousDayWarning(false)}
-                className="text-sm font-medium text-yellow-800 dark:text-yellow-200 underline mt-2"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {validationErrors.length > 0 && (
-        <Card className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-          <div className="flex items-start">
-            <ExclamationTriangleIcon className="w-6 h-6 text-red-600 dark:text-red-400 mr-3 flex-shrink-0" />
-            <div className="flex-1">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                Validation Errors
-              </h3>
-              <ul className="mt-2 space-y-1">
-                {validationErrors.map((error, index) => (
-                  <li
-                    key={index}
-                    className="text-sm text-red-700 dark:text-red-300"
-                  >
-                    • {error}
-                  </li>
-                ))}
-              </ul>
-              <button
-                onClick={() => setValidationErrors([])}
-                className="text-sm font-medium text-red-800 dark:text-red-200 underline mt-2"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      <Card>
-        <div className="flex items-center space-x-4">
-          <CalendarIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-          <div className="flex-1">
-            <label className="label">Select Date</label>
+          <div className="relative">
+            <CalendarIcon className="w-5 h-5 absolute left-3 top-1/2 -transform -translate-y-1/2 text-gray-400" />
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              max={format(new Date(), "yyyy-MM-dd")}
-              disabled={isFinalized}
-              className="input max-w-xs"
+              className="input pl-10"
             />
           </div>
-          {isLoadingExisting && (
-            <div className="flex items-center space-x-2 text-gray-500 dark:text-gray-400">
-              <ArrowPathIcon className="w-5 h-5 animate-spin" />
-              <span className="text-sm">Loading...</span>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      <DailySalesBillsSection
-        selectedDate={selectedDate}
-        billsForDate={billsForDate || []}
-        billsAmount={billsAmount}
-        isDisabled={isFinalized}
-        onBillCreated={() => {
-          refetchBills();
-          queryClient.invalidateQueries({
-            queryKey: ["bills-by-date", selectedDate],
-          });
-        }}
-      />
-
-      <DailySalesSummary totals={totals} billsAmount={billsAmount} />
-
-      <DailySalesInventoryGrid
-        products={productsData?.products || []}
-        categories={categories || []}
-        inventories={inventories}
-        onInventoriesChange={setInventories}
-        isDisabled={isFinalized}
-      />
-
-      <div className="flex justify-end">
-        <Button
-          variant="secondary"
-          onClick={() => {
-            const bottleProduct = productsData?.products.find(
-              (p) =>
-                p.unit === "bottle" && p.shotsPerBottle && p.linkedShotProductId
-            );
-            if (bottleProduct) {
-              handleConvertBottle(bottleProduct);
-            } else {
-              toast.error("No bottle products available for conversion");
-            }
-          }}
-          className="flex items-center"
-          disabled={isFinalized}
-        >
-          <ArrowPathIcon className="w-5 h-5 mr-2" />
-          Convert Bottle to Shots
-        </Button>
-      </div>
-
-      {renderTransferHistory()}
-
-      <DailySalesRevenueForm
-        revenue={revenue}
-        cashAtHand={totals.cashAtHand}
-        onRevenueChange={setRevenue}
-        isDisabled={isFinalized}
-      />
-
-      <DailySalesExpensesForm
-        expenses={expenses}
-        onExpensesChange={setExpenses}
-        isDisabled={isFinalized}
-      />
-
-      <DailySalesStockPurchases
-        stockPurchases={stockPurchases}
-        products={productsData?.products || []}
-        onStockPurchasesChange={setStockPurchases}
-        isDisabled={isFinalized}
-      />
-
-      <Card title="Additional Notes">
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={3}
-          placeholder="Add any additional notes or comments..."
-          disabled={isFinalized}
-          className="input"
-        />
-      </Card>
-
-      {!isFinalized && (
-        <div className="flex justify-end space-x-3">
-          <Button
-            variant="secondary"
-            onClick={handleSaveDraft}
-            isLoading={saveMutation.isPending}
-            disabled={saveMutation.isPending || finalizeMutation.isPending}
-          >
-            Save Draft
-          </Button>
-          {existingDailySales && (
+          {isFinalized && isAdmin && (
             <Button
-              variant="primary"
-              onClick={handleFinalize}
-              isLoading={finalizeMutation.isPending}
-              disabled={saveMutation.isPending || finalizeMutation.isPending}
-              className="flex items-center"
+              variant="secondary"
+              onClick={handleUnlock}
+              isLoading={unlockMutation.isPending}
             >
-              <CheckCircleIcon className="w-5 h-5 mr-2" />
-              Finalize Daily Sales
+              <LockOpenIcon className="w-5 h-5 mr-2" />
+              Unlock
             </Button>
           )}
+        </div>
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Inventory Section */}
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center">
+                <DocumentCheckIcon className="w-5 h-5 mr-2 text-primary-600" />
+                Inventory Tracking
+              </h2>
+              <div className="flex space-x-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleConvertClick}
+                  disabled={isFinalized || bottleProducts.length === 0}
+                  className="flex items-center"
+                >
+                  <ArrowPathIcon className="w-4 h-4 mr-1.5" />
+                  Convert Bottle
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => refetchSales()}
+                >
+                  <ArrowPathIcon className="w-4 h-4 mr-1.5" />
+                  Refresh
+                </Button>
+              </div>
+            </div>
+            <DailySalesInventoryGrid
+              inventories={inventories}
+              onChange={setInventories}
+              disabled={isFinalized}
+              categories={categories || []}
+            />
+          </Card>
+
+          {/* Bills Section */}
+          {existingDailySales && (
+            <DailySalesBillsSection
+              dailySalesId={existingDailySales.id}
+              date={selectedDate}
+              disabled={isFinalized}
+            />
+          )}
+
+          {/* Expenses Section */}
+          <DailySalesExpensesForm
+            expenses={expenses}
+            onChange={setExpenses}
+            disabled={isFinalized}
+          />
+
+          {/* Stock Purchases Section */}
+          <DailySalesStockPurchases
+            purchases={stockPurchases}
+            onChange={setStockPurchases}
+            products={productsData?.products || []}
+            disabled={isFinalized}
+          />
+        </div>
+
+        {/* Sidebar Summary */}
+        <div className="space-y-6">
+          <DailySalesSummary
+            inventories={inventories}
+            expenses={expenses}
+            billsAmount={existingDailySales?.billsAmount || 0}
+            revenueData={revenueData}
+          />
+
+          <DailySalesRevenueForm
+            data={revenueData}
+            onChange={setRevenueData}
+            disabled={isFinalized}
+          />
+
+          <Card>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Notes</h3>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Any special notes for today..."
+              className="input min-h-[100px]"
+              disabled={isFinalized}
+            />
+          </Card>
+        </div>
+      </div>
+
+      {/* Action Bar */}
+      {!isFinalized && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 flex justify-end space-x-4 z-10 lg:left-64">
+          <Button
+            variant="secondary"
+            onClick={handleSave}
+            isLoading={saveMutation.isPending}
+            disabled={finalizeMutation.isPending}
+          >
+            <PencilIcon className="w-5 h-5 mr-2" />
+            Save Draft
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleFinalize}
+            isLoading={finalizeMutation.isPending}
+            disabled={saveMutation.isPending}
+          >
+            <CheckCircleIcon className="w-5 h-5 mr-2" />
+            Finalize Daily Sales
+          </Button>
         </div>
       )}
 
@@ -707,22 +386,37 @@ export const DailySales = () => {
         />
       )}
 
-      {convertingProduct && (
+      {/* Modals */}
+      {showBottleSelection && (
+        <BottleSelectionModal
+          isOpen={true}
+          onClose={() => setShowBottleSelection(false)}
+          bottleProducts={bottleProducts}
+          onSelect={handleBottleSelect}
+        />
+      )}
+
+      {selectedBottle && (
         <BottleConversionModal
           isOpen={true}
-          onClose={() => setConvertingProduct(null)}
-          bottleProduct={convertingProduct}
+          onClose={() => setSelectedBottle(null)}
+          bottleProduct={selectedBottle}
           shotProduct={productsData?.products.find(
-            (p) => p.id === convertingProduct.linkedShotProductId
+            (p) => p.id === selectedBottle.linkedShotProductId
           )}
           onSubmit={(data) => {
+            if (!selectedBottle.linkedShotProductId) {
+              toast.error("No linked shot product found");
+              return;
+            }
+
             transferMutation.mutate({
-              fromProductId: convertingProduct.id,
-              toProductId: convertingProduct.linkedShotProductId!,
+              fromProductId: selectedBottle.id,
+              toProductId: selectedBottle.linkedShotProductId,
               quantity: data.quantity,
               notes: data.notes,
             });
-            setConvertingProduct(null);
+            setSelectedBottle(null);
           }}
           isLoading={transferMutation.isPending}
         />

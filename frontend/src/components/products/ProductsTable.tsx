@@ -81,8 +81,17 @@ export const ProductsTable = ({
             return (
               <tr key={product.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">
-                    {formatProductName(product)}
+                  <div className="flex items-center">
+                    <div className="text-sm font-medium text-gray-900">
+                      {formatProductName(product)}
+                    </div>
+                    {/* Indicator for unlinked bottles */}
+                    {product.unit === "bottle" &&
+                      !product.linkedShotProductId && (
+                        <span className="inline-flex ml-2 px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                          Needs Shot Link
+                        </span>
+                      )}
                   </div>
                   {product.shotsPerBottle && (
                     <div className="text-xs text-gray-500">

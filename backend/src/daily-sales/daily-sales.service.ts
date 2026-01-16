@@ -661,7 +661,10 @@ export class DailySalesService {
     const totalCollected = cashAtHand + nonCashCollected;
 
     let actualCash: number | null = null;
-    if (salesData.actualCashCollected !== undefined && salesData.actualCashCollected !== null) {
+    if (
+      salesData.actualCashCollected !== undefined &&
+      salesData.actualCashCollected !== null
+    ) {
       actualCash = parseFloat(String(salesData.actualCashCollected));
     }
 
@@ -739,6 +742,10 @@ export class DailySalesService {
     return this.dailySalesRepository.save(dailySales);
   }
 
+  /**
+   * Updated method to handle bottle-to-shot conversion with critical validations
+   * and daily inventory synchronization.
+   */
   async createInventoryTransfer(
     dailySalesId: string,
     createTransferDto: CreateInventoryTransferDto,
@@ -760,6 +767,7 @@ export class DailySalesService {
 
     const { fromProductId, toProductId, quantity, notes } = createTransferDto;
 
+    // ✅ CRITICAL FIX: Get products to check linking and units
     const fromProduct = await this.productRepository.findOne({
       where: { id: fromProductId },
     });
@@ -772,6 +780,28 @@ export class DailySalesService {
       throw new NotFoundException('One or both products not found');
     }
 
+    // ✅ CRITICAL VALIDATION: Ensure fromProduct is a bottle
+    if (fromProduct.unit !== 'bottle') {
+      throw new BadRequestException(
+        `Product ${fromProduct.name} is not a bottle. Only bottles can be converted to shots.`,
+      );
+    }
+
+    // ✅ CRITICAL VALIDATION: Ensure toProduct is a shot
+    if (toProduct.unit !== 'shot') {
+      throw new BadRequestException(
+        `Product ${toProduct.name} is not a shot product.`,
+      );
+    }
+
+    // ✅ CRITICAL VALIDATION: Check if products are properly linked
+    if (fromProduct.linkedShotProductId !== toProduct.id) {
+      throw new BadRequestException(
+        `Product ${fromProduct.name} is not linked to ${toProduct.name}. ` +
+          `Please ensure bottle products are properly linked to their shot versions in product setup.`,
+      );
+    }
+
     if (!fromProduct.shotsPerBottle) {
       throw new BadRequestException(
         `Product ${fromProduct.name} does not have shots per bottle configured`,
@@ -780,7 +810,7 @@ export class DailySalesService {
 
     if (fromProduct.currentStock < quantity) {
       throw new BadRequestException(
-        `Insufficient stock. Available: ${fromProduct.currentStock}`,
+        `Insufficient stock. Available: ${fromProduct.currentStock} bottles`,
       );
     }
 
@@ -800,10 +830,39 @@ export class DailySalesService {
 
     const savedTransfer = await this.inventoryTransferRepository.save(transfer);
 
+    // ✅ Update both products' current physical stock
     fromProduct.currentStock -= quantity;
     toProduct.currentStock += resultingQuantity;
 
     await this.productRepository.save([fromProduct, toProduct]);
+
+    // ✅ Update daily sales inventory records if they exist
+    const fromInventory = await this.dailyInventoryRepository.findOne({
+      where: {
+        dailySalesId,
+        productId: fromProductId,
+      },
+    });
+
+    const toInventory = await this.dailyInventoryRepository.findOne({
+      where: {
+        dailySalesId,
+        productId: toProductId,
+      },
+    });
+
+    if (fromInventory) {
+      // Bottle: Reduce closing stock as bottles are opened for shots
+      fromInventory.closingStock = fromProduct.currentStock;
+      await this.dailyInventoryRepository.save(fromInventory);
+    }
+
+    if (toInventory) {
+      // Shot: Increase opening stock as new shots are added to available inventory
+      toInventory.openingStock = toProduct.currentStock;
+      toInventory.closingStock = toProduct.currentStock; // Will be adjusted by subsequent sales
+      await this.dailyInventoryRepository.save(toInventory);
+    }
 
     return savedTransfer;
   }

@@ -19,6 +19,7 @@ import {
   FolderIcon,
   CurrencyDollarIcon,
   ExclamationTriangleIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { formatCurrency } from "../utils/formatters";
 
@@ -163,6 +164,34 @@ export const Products = () => {
           </p>
         </div>
         <div className="flex space-x-3">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              // Find unlinked bottles and their potential shot matches
+              const unlinkedBottles =
+                productsData?.products.filter(
+                  (p) => p.unit === "bottle" && !p.linkedShotProductId
+                ) || [];
+
+              const shotProducts =
+                productsData?.products.filter((p) => p.unit === "shot") || [];
+
+              if (unlinkedBottles.length === 0) {
+                toast.success("All bottles are already linked!");
+                return;
+              }
+
+              // Show a modal or alert with suggestions
+              toast.success(
+                `${unlinkedBottles.length} bottles need linking. ` +
+                  `Edit each bottle product to link to one of ${shotProducts.length} available shot products.`
+              );
+            }}
+            className="flex items-center"
+          >
+            <ArrowPathIcon className="w-5 h-5 mr-2" />
+            Check Bottle Links
+          </Button>
           <Button
             variant="secondary"
             onClick={() => setIsCreateCategoryOpen(true)}

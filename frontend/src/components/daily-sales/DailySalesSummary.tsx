@@ -1,3 +1,4 @@
+import type { DailyInventoryItem } from "../../types/daily-sales.types";
 import { formatCurrency } from "../../utils/formatters";
 import { Card } from "../ui/Card";
 import {
@@ -15,6 +16,7 @@ interface DailySalesSummaryProps {
     shortage: number;
     netRevenue: number;
     cashAtHand: number;
+    inventories: DailyInventoryItem[];
   };
   billsAmount: number;
 }
