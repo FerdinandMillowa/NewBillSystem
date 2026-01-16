@@ -28,7 +28,9 @@ import type {
   DailyInventoryItem,
   DailyExpenseItem,
   StockPurchaseItem,
+  Product,
 } from "../types/daily-sales.types";
+import { BottleConversionModal } from "../components/daily-sales/BottleConversionModal";
 
 export const DailySales = () => {
   const { isAdmin } = useAuth();
@@ -49,6 +51,10 @@ export const DailySales = () => {
   const [expenses, setExpenses] = useState<DailyExpenseItem[]>([]);
   const [stockPurchases, setStockPurchases] = useState<StockPurchaseItem[]>([]);
   const [notes, setNotes] = useState("");
+  const [convertingProduct, setConvertingProduct] = useState<Product | null>(
+    null
+  );
+  const [inventoryTransfers, setInventoryTransfers] = useState<any[]>([]);
 
   const { data: categories } = useQuery({
     queryKey: ["product-categories"],
@@ -243,7 +249,7 @@ export const DailySales = () => {
 
       setInventories(updatedInventories);
     }
-  }, [stockPurchases]);
+  }, [inventories, stockPurchases]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -300,7 +306,74 @@ export const DailySales = () => {
     },
   });
 
-  // ✅ CRITICAL FIX: Only include date when creating, not when updating
+  const handleConvertBottle = (product: Product) => {
+    setConvertingProduct(product);
+  };
+
+  const transferMutation = useMutation({
+    mutationFn: async (data: {
+      fromProductId: string;
+      toProductId: string;
+      quantity: number;
+      notes?: string;
+    }) => {
+      if (!existingDailySales) {
+        throw new Error("No daily sales record found");
+      }
+      return dailySalesService.createInventoryTransfer(
+        existingDailySales.id,
+        data
+      );
+    },
+    onSuccess: (transfer) => {
+      queryClient.invalidateQueries({ queryKey: ["daily-sales-by-date"] });
+      queryClient.invalidateQueries({ queryKey: ["products-for-daily-sales"] });
+      setInventoryTransfers([...inventoryTransfers, transfer]);
+      toast.success(`Converted ${transfer.quantity} bottles to shots!`);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to convert bottles");
+    },
+  });
+
+  const renderTransferHistory = () => {
+    if (
+      inventoryTransfers.length === 0 &&
+      existingDailySales?.inventoryTransfers?.length === 0
+    ) {
+      return null;
+    }
+
+    const transfers = [
+      ...inventoryTransfers,
+      ...(existingDailySales?.inventoryTransfers || []),
+    ];
+
+    return (
+      <Card title="Bottle to Shot Conversions">
+        <div className="space-y-3">
+          {transfers.map((transfer) => (
+            <div
+              key={transfer.id}
+              className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg"
+            >
+              <div>
+                <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                  {transfer.fromProduct?.name} → {transfer.toProduct?.name}
+                </p>
+                <p className="text-sm text-purple-600 dark:text-purple-400">
+                  {transfer.quantity} bottle(s) = {transfer.resultingQuantity}{" "}
+                  shots
+                </p>
+              </div>
+              <ArrowPathIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            </div>
+          ))}
+        </div>
+      </Card>
+    );
+  };
+
   const handleSaveDraft = () => {
     const validation = validateStockPurchases();
     if (!validation.valid) {
@@ -311,7 +384,6 @@ export const DailySales = () => {
 
     setValidationErrors([]);
 
-    // Build base data object WITHOUT date
     const data: any = {
       cash: totals.cashAtHand,
       ...revenue,
@@ -324,7 +396,6 @@ export const DailySales = () => {
       notes,
     };
 
-    // ✅ CRITICAL FIX: Only add date when creating (not updating)
     if (!existingDailySales) {
       data.date = selectedDate;
     }
@@ -528,6 +599,30 @@ export const DailySales = () => {
         isDisabled={isFinalized}
       />
 
+      <div className="flex justify-end">
+        <Button
+          variant="secondary"
+          onClick={() => {
+            const bottleProduct = productsData?.products.find(
+              (p) =>
+                p.unit === "bottle" && p.shotsPerBottle && p.linkedShotProductId
+            );
+            if (bottleProduct) {
+              handleConvertBottle(bottleProduct);
+            } else {
+              toast.error("No bottle products available for conversion");
+            }
+          }}
+          className="flex items-center"
+          disabled={isFinalized}
+        >
+          <ArrowPathIcon className="w-5 h-5 mr-2" />
+          Convert Bottle to Shots
+        </Button>
+      </div>
+
+      {renderTransferHistory()}
+
       <DailySalesRevenueForm
         revenue={revenue}
         cashAtHand={totals.cashAtHand}
@@ -609,6 +704,27 @@ export const DailySales = () => {
           dailySalesId={existingDailySales.id}
           currentCashAtHand={existingDailySales.cashAtHand || 0}
           currentActualCash={existingDailySales.actualCashCollected}
+        />
+      )}
+
+      {convertingProduct && (
+        <BottleConversionModal
+          isOpen={true}
+          onClose={() => setConvertingProduct(null)}
+          bottleProduct={convertingProduct}
+          shotProduct={productsData?.products.find(
+            (p) => p.id === convertingProduct.linkedShotProductId
+          )}
+          onSubmit={(data) => {
+            transferMutation.mutate({
+              fromProductId: convertingProduct.id,
+              toProductId: convertingProduct.linkedShotProductId!,
+              quantity: data.quantity,
+              notes: data.notes,
+            });
+            setConvertingProduct(null);
+          }}
+          isLoading={transferMutation.isPending}
         />
       )}
     </div>
