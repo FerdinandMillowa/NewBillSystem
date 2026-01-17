@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Modal } from "../../components/ui/Modal";
-import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
+import { Modal } from "../ui/Modal";
+import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
 import toast from "react-hot-toast";
 import {
   ArrowPathIcon,
   InformationCircleIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import type { Product } from "../../types/product.types";
 
@@ -100,7 +101,9 @@ export const BottleConversionModal = ({
 
         {/* Quantity Input */}
         <div>
-          <label className="label">Number of Bottles to Open</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Number of Bottles to Open
+          </label>
           <Input
             type="number"
             value={quantity}
@@ -117,7 +120,7 @@ export const BottleConversionModal = ({
         {/* Stock Impact Preview */}
         <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-            Stock Impact Preview
+            📊 Stock Impact Preview
           </h4>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="text-red-700 dark:text-red-400">
@@ -137,20 +140,33 @@ export const BottleConversionModal = ({
           </div>
         </div>
 
+        {/* Warning for high quantities */}
+        {quantity > 5 && (
+          <div className="p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+            <p className="text-sm text-orange-800 dark:text-orange-200 flex items-center">
+              <ExclamationTriangleIcon className="w-4 h-4 mr-2" />
+              You're converting {quantity} bottles ({shotsToAdd} shots). Please
+              verify this is correct.
+            </p>
+          </div>
+        )}
+
         {/* Notes */}
         <div>
-          <label className="label">Notes (Optional)</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Notes (Optional)
+          </label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             placeholder="e.g., Opened for bar service, Customer requested shots..."
-            className="input"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end space-x-3 pt-4">
+        <div className="flex justify-end space-x-3 pt-4 border-t">
           <Button
             type="button"
             variant="secondary"

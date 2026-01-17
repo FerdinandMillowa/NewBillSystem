@@ -24,7 +24,14 @@ import {
   ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { format } from "date-fns";
-import type { DailyInventoryItem, Product } from "../types/product.types";
+import type {
+  DailyInventoryItem,
+  DailyExpenseItem,
+  StockPurchaseItem,
+} from "../types/daily-sales.types";
+import type { Product } from "../types/product.types";
+
+// Import the new modals - using relative paths
 import { BottleSelectionModal } from "../components/daily-sales/BottleSelectionModal";
 import { BottleConversionModal } from "../components/daily-sales/BottleConversionModal";
 
@@ -35,8 +42,8 @@ export const DailySales = () => {
     new Date().toISOString().split("T")[0]
   );
   const [inventories, setInventories] = useState<DailyInventoryItem[]>([]);
-  const [expenses, setExpenses] = useState<any[]>([]);
-  const [stockPurchases, setStockPurchases] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<DailyExpenseItem[]>([]);
+  const [stockPurchases, setStockPurchases] = useState<StockPurchaseItem[]>([]);
   const [notes, setNotes] = useState("");
   const [revenueData, setRevenueData] = useState({
     airtelMoney: 0,
@@ -76,16 +83,16 @@ export const DailySales = () => {
   useEffect(() => {
     if (existingDailySales) {
       setInventories(
-        existingDailySales.inventories.map((inv: any) => ({
+        existingDailySales.inventories?.map((inv: any) => ({
           productId: inv.productId,
-          openingStock: inv.openingStock,
-          stockIn: inv.stockIn,
-          closingStock: inv.closingStock,
-          soldQuantity: inv.soldQuantity,
+          openingStock: inv.openingStock || 0,
+          stockIn: inv.stockIn || 0,
+          closingStock: inv.closingStock || 0,
+          soldQuantity: inv.soldQuantity || 0,
           productName: inv.product?.name,
           unit: inv.product?.unit,
           categoryId: inv.product?.categoryId,
-        }))
+        })) || []
       );
       setExpenses(existingDailySales.expenses || []);
       setStockPurchases(existingDailySales.stockPurchases || []);
@@ -197,8 +204,11 @@ export const DailySales = () => {
     setShowBottleSelection(false);
   };
 
+  // Filter bottle products that can be converted
   const bottleProducts =
-    productsData?.products.filter((p) => p.unit === "bottle") || [];
+    productsData?.products?.filter(
+      (p) => p.unit === "bottle" && p.shotsPerBottle && p.linkedShotProductId
+    ) || [];
 
   if (isSalesLoading) {
     return (
@@ -221,7 +231,7 @@ export const DailySales = () => {
         </div>
         <div className="flex items-center space-x-3">
           <div className="relative">
-            <CalendarIcon className="w-5 h-5 absolute left-3 top-1/2 -transform -translate-y-1/2 text-gray-400" />
+            <CalendarIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="date"
               value={selectedDate}
@@ -273,12 +283,20 @@ export const DailySales = () => {
                 </Button>
               </div>
             </div>
-            <DailySalesInventoryGrid
-              inventories={inventories}
-              onChange={setInventories}
-              disabled={isFinalized}
-              categories={categories || []}
-            />
+
+            {productsData?.products && productsData.products.length > 0 ? (
+              <DailySalesInventoryGrid
+                products={productsData.products}
+                categories={categories || []}
+                inventories={inventories}
+                onInventoriesChange={setInventories}
+                isDisabled={isFinalized}
+              />
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500">Loading products...</p>
+              </div>
+            )}
           </Card>
 
           {/* Bills Section */}

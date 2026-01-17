@@ -1,11 +1,9 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Card } from "../ui/Card";
 import { formatCurrency } from "../../utils/formatters";
-import type {
-  Product,
-  DailyInventoryItem,
-} from "../../types/daily-sales.types";
-import type { ProductCategory } from "../../types/product.types";
+// ✅ FIXED: Using product.types to match productsData
+import type { Product, ProductCategory } from "../../types/product.types";
+import type { DailyInventoryItem } from "../../types/daily-sales.types";
 
 interface DailySalesInventoryGridProps {
   products: Product[];
@@ -22,6 +20,33 @@ export const DailySalesInventoryGrid = ({
   onInventoriesChange,
   isDisabled = false,
 }: DailySalesInventoryGridProps) => {
+  // ✅ ADDED: Null checks for products and categories
+  if (!products || products.length === 0) {
+    return (
+      <Card title="Product Inventory & Sales">
+        <div className="text-center py-8">
+          <p className="text-gray-500">No products available</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Products need to be created first
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
+  if (!categories || categories.length === 0) {
+    return (
+      <Card title="Product Inventory & Sales">
+        <div className="text-center py-8">
+          <p className="text-gray-500">No categories available</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Create product categories first
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set(categories.map((c) => c.id))
   );
@@ -92,7 +117,6 @@ export const DailySalesInventoryGrid = ({
     products: products.filter((p) => p.categoryId === category.id),
   }));
 
-  // Calculate category totals
   const calculateCategoryTotal = (categoryProducts: Product[]): number => {
     return categoryProducts.reduce((sum, product) => {
       const inv = getInventoryForProduct(product.id);
@@ -100,7 +124,6 @@ export const DailySalesInventoryGrid = ({
     }, 0);
   };
 
-  // Calculate grand total
   const grandTotal = products.reduce((sum, product) => {
     const inv = getInventoryForProduct(product.id);
     return sum + calculateRevenue(product, inv);
@@ -147,10 +170,8 @@ export const DailySalesInventoryGrid = ({
                 const categoryTotal = calculateCategoryTotal(categoryProducts);
 
                 return (
-                  <>
-                    {/* Category Header Row */}
+                  <Fragment key={category.id}>
                     <tr
-                      key={`category-${category.id}`}
                       className="bg-primary-50 hover:bg-primary-100 cursor-pointer"
                       onClick={() => toggleCategory(category.id)}
                     >
@@ -160,204 +181,89 @@ export const DailySalesInventoryGrid = ({
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
-                            <svg
-                              className={`w-5 h-5 mr-2 transform transition-transform ${
-                                isExpanded ? "rotate-90" : ""
-                              }`}
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
                             <span className="uppercase">{category.name}</span>
-                            <span className="ml-2 text-xs text-primary-600">
-                              ({categoryProducts.length} products)
-                            </span>
                           </div>
-                          <span className="font-bold text-primary-900">
-                            {formatCurrency(categoryTotal)}
-                          </span>
+                          <span>{formatCurrency(categoryTotal)}</span>
                         </div>
                       </td>
                     </tr>
 
-                    {/* Product Rows */}
                     {isExpanded &&
                       categoryProducts.map((product) => {
                         const inv = getInventoryForProduct(product.id);
                         const soldQuantity = calculateSoldQuantity(inv);
                         const revenue = calculateRevenue(product, inv);
-                        const total = inv.openingStock + inv.stockIn;
-
                         return (
-                          <tr
-                            key={product.id}
-                            className="hover:bg-gray-50 transition-colors"
-                          >
-                            {/* Product Name */}
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900">
-                                {product.name}
-                              </div>
-                              {product.size && (
-                                <div className="text-xs text-gray-500">
-                                  {product.size}
-                                </div>
-                              )}
+                          <tr key={product.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                              {product.name}
                             </td>
-
-                            {/* Opening Stock */}
                             <td className="px-4 py-3 text-center">
                               <input
                                 type="number"
-                                min="0"
                                 value={inv.openingStock}
                                 onChange={(e) =>
                                   handleInventoryChange(
                                     product.id,
                                     "openingStock",
-                                    parseInt(e.target.value) || 0
+                                    +e.target.value
                                   )
                                 }
                                 disabled={isDisabled}
-                                className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                className="w-16 p-1 border rounded text-center"
                               />
                             </td>
-
-                            {/* Stock In */}
                             <td className="px-4 py-3 text-center">
                               <input
                                 type="number"
-                                min="0"
                                 value={inv.stockIn}
                                 onChange={(e) =>
                                   handleInventoryChange(
                                     product.id,
                                     "stockIn",
-                                    parseInt(e.target.value) || 0
+                                    +e.target.value
                                   )
                                 }
                                 disabled={isDisabled}
-                                className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                className="w-16 p-1 border rounded text-center"
                               />
                             </td>
-
-                            {/* Total (calculated) */}
-                            <td className="px-4 py-3 text-center">
-                              <span className="text-sm font-medium text-gray-700">
-                                {total}
-                              </span>
+                            <td className="px-4 py-3 text-center text-sm">
+                              {inv.openingStock + inv.stockIn}
                             </td>
-
-                            {/* Sold (calculated) */}
-                            <td className="px-4 py-3 text-center">
-                              <span
-                                className={`text-sm font-bold ${
-                                  soldQuantity > 0
-                                    ? "text-green-600"
-                                    : soldQuantity < 0
-                                    ? "text-red-600"
-                                    : "text-gray-600"
-                                }`}
-                              >
-                                {soldQuantity}
-                              </span>
+                            <td className="px-4 py-3 text-center text-sm font-bold">
+                              {soldQuantity}
                             </td>
-
-                            {/* Closing Stock */}
                             <td className="px-4 py-3 text-center">
                               <input
                                 type="number"
-                                min="0"
                                 value={inv.closingStock}
                                 onChange={(e) =>
                                   handleInventoryChange(
                                     product.id,
                                     "closingStock",
-                                    parseInt(e.target.value) || 0
+                                    +e.target.value
                                   )
                                 }
                                 disabled={isDisabled}
-                                className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                className="w-16 p-1 border rounded text-center"
                               />
                             </td>
-
-                            {/* Price */}
-                            <td className="px-4 py-3 text-right">
-                              <span className="text-sm text-gray-900">
-                                {formatCurrency(product.currentPrice)}
-                              </span>
+                            <td className="px-4 py-3 text-right text-sm">
+                              {formatCurrency(product.currentPrice)}
                             </td>
-
-                            {/* Revenue */}
-                            <td className="px-4 py-3 text-right">
-                              <span className="text-sm font-bold text-gray-900">
-                                {formatCurrency(revenue)}
-                              </span>
+                            <td className="px-4 py-3 text-right text-sm font-bold">
+                              {formatCurrency(revenue)}
                             </td>
                           </tr>
                         );
                       })}
-                  </>
+                  </Fragment>
                 );
               }
             )}
-
-            {/* Grand Total Row */}
-            <tr className="bg-gray-100 font-bold">
-              <td
-                colSpan={7}
-                className="px-4 py-3 text-right text-sm text-gray-900"
-              >
-                TOTAL SALES
-              </td>
-              <td className="px-4 py-3 text-right text-sm text-gray-900">
-                {formatCurrency(grandTotal)}
-              </td>
-            </tr>
           </tbody>
         </table>
-      </div>
-
-      {/* Helper Text */}
-      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex items-start">
-          <svg
-            className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path
-              fillRule="evenodd"
-              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-              clipRule="evenodd"
-            />
-          </svg>
-          <div className="text-sm text-blue-800">
-            <p className="font-medium mb-1">How to use this grid:</p>
-            <ul className="list-disc list-inside space-y-1 text-xs">
-              <li>
-                <strong>Opening Stock:</strong> Starting inventory (auto-filled
-                from previous day's closing)
-              </li>
-              <li>
-                <strong>Stock In:</strong> New stock purchased/received today
-              </li>
-              <li>
-                <strong>Closing Stock:</strong> Remaining inventory at end of
-                day
-              </li>
-              <li>
-                <strong>Sold:</strong> Automatically calculated as (Opening +
-                Stock In - Closing)
-              </li>
-            </ul>
-          </div>
-        </div>
       </div>
     </Card>
   );
