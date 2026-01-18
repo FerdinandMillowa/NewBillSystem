@@ -1,6 +1,6 @@
-
 import { format, formatDistanceToNow } from 'date-fns';
 import type { Product } from '../types/product.types';
+
 export const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-MW', {
     style: 'currency',
@@ -36,8 +36,16 @@ export const formatPercentage = (value: number): string => {
   return `${value.toFixed(2)}%`;
 };
 
-export const formatCustomerName = (firstName: string, lastName: string): string => {
-  return `${firstName} ${lastName}`;
+// ✅ UPDATED: Added null safety to formatCustomerName
+export const formatCustomerName = (
+  firstName?: string | null,
+  lastName?: string | null
+): string => {
+  // Handle null/undefined cases
+  const first = firstName?.trim() || '';
+  const last = lastName?.trim() || '';
+  const fullName = `${first} ${last}`.trim();
+  return fullName || 'Unknown Customer';
 };
 
 export const getPaymentMethodLabel = (method: string): string => {

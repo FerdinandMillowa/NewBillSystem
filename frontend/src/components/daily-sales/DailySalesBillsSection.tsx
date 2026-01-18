@@ -6,7 +6,7 @@ import { dailySalesService } from "../../services/daily-sales.service";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
-import { formatCurrency, formatCustomerName } from "../../utils/formatters";
+import { formatCurrency } from "../../utils/formatters";
 import {
   PlusIcon,
   DocumentTextIcon,
@@ -101,6 +101,14 @@ export const DailySalesBillsSection = ({
     });
   };
 
+  // ✅ CRITICAL FIX: Helper function to safely get customer name
+  const getCustomerName = (customer: any): string => {
+    if (!customer) return "Unknown Customer";
+    const firstName = customer.firstName || "";
+    const lastName = customer.lastName || "";
+    return `${firstName} ${lastName}`.trim() || "Unknown Customer";
+  };
+
   return (
     <Card
       title={
@@ -120,8 +128,8 @@ export const DailySalesBillsSection = ({
         </div>
       }
     >
-      {/* Existing Bills List */}
-      {billsForDate.length > 0 ? (
+      {/* ✅ FIXED: Existing Bills List with proper null safety */}
+      {billsForDate && billsForDate.length > 0 ? (
         <div className="space-y-2 mb-4">
           {billsForDate.map((bill: any) => (
             <div
@@ -131,20 +139,21 @@ export const DailySalesBillsSection = ({
               <div className="flex-1">
                 <div className="flex items-center">
                   <UserIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
+                  {/* ✅ CRITICAL FIX: Use helper function with null safety */}
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {formatCustomerName(
-                      bill.customer?.firstName,
-                      bill.customer?.lastName
-                    )}
+                    {getCustomerName(bill.customer)}
                   </p>
                 </div>
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 ml-6">
-                  {bill.description}
+                  {bill.description || "No description"}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 ml-6">
+                  {new Date(bill.createdAt).toLocaleString()}
                 </p>
               </div>
               <div className="text-right">
                 <p className="text-sm font-bold text-gray-900 dark:text-white">
-                  {formatCurrency(bill.amount)}
+                  {formatCurrency(parseFloat(bill.amount?.toString() || "0"))}
                 </p>
               </div>
             </div>
@@ -193,10 +202,7 @@ export const DailySalesBillsSection = ({
                     <option value="">Select customer</option>
                     {customersData?.customers?.map((customer: any) => (
                       <option key={customer.id} value={customer.id}>
-                        {formatCustomerName(
-                          customer.firstName,
-                          customer.lastName
-                        )}
+                        {getCustomerName(customer)}
                       </option>
                     ))}
                   </select>

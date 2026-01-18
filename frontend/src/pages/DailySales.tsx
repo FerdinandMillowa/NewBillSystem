@@ -21,7 +21,6 @@ import {
   ArrowPathIcon,
   LockOpenIcon,
   PencilIcon,
-  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { format } from "date-fns";
 import type {
@@ -30,8 +29,6 @@ import type {
   StockPurchaseItem,
 } from "../types/daily-sales.types";
 import type { Product } from "../types/product.types";
-
-// Import the new modals - using relative paths
 import { BottleSelectionModal } from "../components/daily-sales/BottleSelectionModal";
 import { BottleConversionModal } from "../components/daily-sales/BottleConversionModal";
 
@@ -42,8 +39,8 @@ export const DailySales = () => {
     new Date().toISOString().split("T")[0]
   );
   const [inventories, setInventories] = useState<DailyInventoryItem[]>([]);
-  const [expenses, setExpenses] = useState<DailyExpenseItem[]>([]);
-  const [stockPurchases, setStockPurchases] = useState<StockPurchaseItem[]>([]);
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [stockPurchases, setStockPurchases] = useState<any[]>([]);
   const [notes, setNotes] = useState("");
   const [revenueData, setRevenueData] = useState({
     airtelMoney: 0,
@@ -79,20 +76,62 @@ export const DailySales = () => {
 
   const isFinalized = existingDailySales?.status === "finalized";
 
+  // ✅ CRITICAL FIX: Calculation helper functions (properly defined)
+  const calculateTotalSales = () => {
+    if (!productsData?.products) return 0;
+
+    return inventories.reduce((total, inv) => {
+      const product = productsData.products.find((p) => p.id === inv.productId);
+      if (!product) return total;
+
+      const soldQuantity = inv.openingStock + inv.stockIn - inv.closingStock;
+      const revenue = soldQuantity * product.currentPrice;
+      return total + revenue;
+    }, 0);
+  };
+
+  const calculateTotalExpenses = () => {
+    return expenses.reduce(
+      (sum, exp) => sum + (parseFloat(String(exp.amount)) || 0),
+      0
+    );
+  };
+
+  const calculateTotalCollected = () => {
+    const airtelMoney = parseFloat(String(revenueData.airtelMoney)) || 0;
+    const mpamba = parseFloat(String(revenueData.mpamba)) || 0;
+    const bank = parseFloat(String(revenueData.bank)) || 0;
+    const cashAtHand = calculateCashAtHand();
+    return cashAtHand + airtelMoney + mpamba + bank;
+  };
+
+  const calculateCashAtHand = () => {
+    const totalSales = calculateTotalSales();
+    const totalExpenses = calculateTotalExpenses();
+    const airtelMoney = parseFloat(String(revenueData.airtelMoney)) || 0;
+    const mpamba = parseFloat(String(revenueData.mpamba)) || 0;
+    const bank = parseFloat(String(revenueData.bank)) || 0;
+    const billsAmount = existingDailySales?.billsAmount || 0;
+
+    return (
+      totalSales - totalExpenses - airtelMoney - mpamba - bank - billsAmount
+    );
+  };
+
   // Initialize form when daily sales record is fetched
   useEffect(() => {
     if (existingDailySales) {
       setInventories(
-        existingDailySales.inventories?.map((inv: any) => ({
+        existingDailySales.inventories.map((inv: any) => ({
           productId: inv.productId,
-          openingStock: inv.openingStock || 0,
-          stockIn: inv.stockIn || 0,
-          closingStock: inv.closingStock || 0,
-          soldQuantity: inv.soldQuantity || 0,
+          openingStock: inv.openingStock,
+          stockIn: inv.stockIn,
+          closingStock: inv.closingStock,
+          soldQuantity: inv.soldQuantity,
           productName: inv.product?.name,
           unit: inv.product?.unit,
           categoryId: inv.product?.categoryId,
-        })) || []
+        }))
       );
       setExpenses(existingDailySales.expenses || []);
       setStockPurchases(existingDailySales.stockPurchases || []);
@@ -204,11 +243,8 @@ export const DailySales = () => {
     setShowBottleSelection(false);
   };
 
-  // Filter bottle products that can be converted
   const bottleProducts =
-    productsData?.products?.filter(
-      (p) => p.unit === "bottle" && p.shotsPerBottle && p.linkedShotProductId
-    ) || [];
+    productsData?.products.filter((p) => p.unit === "bottle") || [];
 
   if (isSalesLoading) {
     return (
@@ -252,107 +288,111 @@ export const DailySales = () => {
         </div>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          {/* Inventory Section */}
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900 flex items-center">
-                <DocumentCheckIcon className="w-5 h-5 mr-2 text-primary-600" />
-                Inventory Tracking
-              </h2>
-              <div className="flex space-x-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleConvertClick}
-                  disabled={isFinalized || bottleProducts.length === 0}
-                  className="flex items-center"
-                >
-                  <ArrowPathIcon className="w-4 h-4 mr-1.5" />
-                  Convert Bottle
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => refetchSales()}
-                >
-                  <ArrowPathIcon className="w-4 h-4 mr-1.5" />
-                  Refresh
-                </Button>
-              </div>
-            </div>
+      {/* ✅ Bills Section - FIXED: Pass bills array properly */}
+      {existingDailySales && (
+        <DailySalesBillsSection
+          selectedDate={selectedDate}
+          billsForDate={existingDailySales.bills || []}
+          billsAmount={existingDailySales.billsAmount || 0}
+          isDisabled={isFinalized}
+          onBillCreated={() => refetchSales()}
+        />
+      )}
 
-            {productsData?.products && productsData.products.length > 0 ? (
-              <DailySalesInventoryGrid
-                products={productsData.products}
-                categories={categories || []}
-                inventories={inventories}
-                onInventoriesChange={setInventories}
-                isDisabled={isFinalized}
-              />
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-gray-500">Loading products...</p>
-              </div>
-            )}
-          </Card>
+      {/* ✅ Summary - FIXED: Pass proper calculated values */}
+      <DailySalesSummary
+        totals={{
+          totalSales: calculateTotalSales(),
+          totalCollected: calculateTotalCollected(),
+          totalExpenses: calculateTotalExpenses(),
+          shortage: existingDailySales?.shortage || 0,
+          netRevenue: calculateTotalSales() - calculateTotalExpenses(),
+          cashAtHand: calculateCashAtHand(),
+          inventories: inventories,
+        }}
+        billsAmount={existingDailySales?.billsAmount || 0}
+      />
 
-          {/* Bills Section */}
-          {existingDailySales && (
-            <DailySalesBillsSection
-              dailySalesId={existingDailySales.id}
-              date={selectedDate}
-              disabled={isFinalized}
-            />
-          )}
-
-          {/* Expenses Section */}
-          <DailySalesExpensesForm
-            expenses={expenses}
-            onChange={setExpenses}
-            disabled={isFinalized}
-          />
-
-          {/* Stock Purchases Section */}
-          <DailySalesStockPurchases
-            purchases={stockPurchases}
-            onChange={setStockPurchases}
-            products={productsData?.products || []}
-            disabled={isFinalized}
-          />
+      {/* ✅ Inventory Tracking */}
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center">
+            <DocumentCheckIcon className="w-5 h-5 mr-2 text-primary-600" />
+            Inventory Tracking
+          </h2>
+          <div className="flex space-x-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleConvertClick}
+              disabled={isFinalized || bottleProducts.length === 0}
+              className="flex items-center"
+            >
+              <ArrowPathIcon className="w-4 h-4 mr-1.5" />
+              Convert Bottle
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => refetchSales()}
+            >
+              <ArrowPathIcon className="w-4 h-4 mr-1.5" />
+              Refresh
+            </Button>
+          </div>
         </div>
 
-        {/* Sidebar Summary */}
-        <div className="space-y-6">
-          <DailySalesSummary
+        {productsData?.products && productsData.products.length > 0 ? (
+          <DailySalesInventoryGrid
+            products={productsData.products}
+            categories={categories || []}
             inventories={inventories}
-            expenses={expenses}
-            billsAmount={existingDailySales?.billsAmount || 0}
-            revenueData={revenueData}
+            onInventoriesChange={setInventories}
+            isDisabled={isFinalized}
           />
+        ) : (
+          <div className="text-center py-8">
+            <p className="text-gray-500">Loading products...</p>
+          </div>
+        )}
+      </Card>
 
-          <DailySalesRevenueForm
-            data={revenueData}
-            onChange={setRevenueData}
-            disabled={isFinalized}
-          />
+      {/* ✅ Income Avenue (Revenue Collection) */}
+      <DailySalesRevenueForm
+        revenue={revenueData}
+        cashAtHand={calculateCashAtHand()}
+        onRevenueChange={setRevenueData}
+        isDisabled={isFinalized}
+      />
 
-          <Card>
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Notes</h3>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Any special notes for today..."
-              className="input min-h-[100px]"
-              disabled={isFinalized}
-            />
-          </Card>
-        </div>
-      </div>
+      {/* ✅ Expenses */}
+      <DailySalesExpensesForm
+        expenses={expenses}
+        onExpensesChange={setExpenses}
+        isDisabled={isFinalized}
+      />
 
-      {/* Action Bar */}
+      {/* ✅ Stock Purchases */}
+      <DailySalesStockPurchases
+        stockPurchases={stockPurchases}
+        products={productsData?.products || []}
+        onStockPurchasesChange={setStockPurchases}
+        isDisabled={isFinalized}
+      />
+
+      {/* ✅ Notes */}
+      <Card>
+        <h3 className="text-sm font-medium text-gray-700 mb-2">Notes</h3>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Any special notes for today..."
+          className="input min-h-[100px]"
+          disabled={isFinalized}
+        />
+      </Card>
+
+      {/* ✅ Action Bar (Save/Finalize buttons at bottom) */}
       {!isFinalized && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 flex justify-end space-x-4 z-10 lg:left-64">
           <Button
