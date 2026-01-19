@@ -43,7 +43,13 @@ export class DailySalesService {
 
     let dailySales = await this.dailySalesRepository.findOne({
       where: { date: targetDate },
-      relations: ['inventories', 'expenses', 'stockPurchases', 'bills'],
+      relations: [
+        'inventories',
+        'expenses',
+        'stockPurchases',
+        'bills',
+        'bills.customer',
+      ],
     });
 
     if (dailySales) {
@@ -817,6 +823,10 @@ export class DailySalesService {
     const conversionRate = fromProduct.shotsPerBottle;
     const resultingQuantity = quantity * conversionRate;
 
+    // Capture previous physical stocks before mutation so we can update daily inventories
+    const prevFromProductStock = fromProduct.currentStock;
+    const prevToProductStock = toProduct.currentStock;
+
     const transfer = this.inventoryTransferRepository.create({
       dailySalesId,
       fromProductId,
@@ -852,15 +862,33 @@ export class DailySalesService {
     });
 
     if (fromInventory) {
-      // Bottle: Reduce closing stock as bottles are opened for shots
-      fromInventory.closingStock = fromProduct.currentStock;
+      /**
+       * IMPORTANT:
+       * Do NOT make the conversion look like a sale.
+       * The soldQuantity is computed as (opening + stockIn - closing).
+       * If we set closingStock to the new product.currentStock (after decrement),
+       * the conversion will be treated as sold.
+       *
+       * To avoid that, keep the daily inventory's closingStock at the previous
+       * closing stock value (i.e., prevFromProductStock). The physical product
+       * stock in the products table reflects the actual inventory, while the
+       * daily inventory record preserves the sold calculation for the day.
+       */
+      fromInventory.closingStock = prevFromProductStock;
       await this.dailyInventoryRepository.save(fromInventory);
     }
 
     if (toInventory) {
-      // Shot: Increase opening stock as new shots are added to available inventory
-      toInventory.openingStock = toProduct.currentStock;
-      toInventory.closingStock = toProduct.currentStock; // Will be adjusted by subsequent sales
+      /**
+       * For the shot product we want to reflect that new shots were added to
+       * the day's available inventory. Increase openingStock by resultingQuantity
+       * and set closingStock equal to the new openingStock (since these shots
+       * haven't been sold yet). This makes future sold calculations correct.
+       */
+      const previousOpening = toInventory.openingStock || prevToProductStock;
+      const newOpening = previousOpening + resultingQuantity;
+      toInventory.openingStock = newOpening;
+      toInventory.closingStock = newOpening;
       await this.dailyInventoryRepository.save(toInventory);
     }
 

@@ -23,11 +23,7 @@ import {
   PencilIcon,
 } from "@heroicons/react/24/outline";
 import { format } from "date-fns";
-import type {
-  DailyInventoryItem,
-  DailyExpenseItem,
-  StockPurchaseItem,
-} from "../types/daily-sales.types";
+import type { DailyInventoryItem } from "../types/daily-sales.types";
 import type { Product } from "../types/product.types";
 import { BottleSelectionModal } from "../components/daily-sales/BottleSelectionModal";
 import { BottleConversionModal } from "../components/daily-sales/BottleConversionModal";
@@ -74,9 +70,16 @@ export const DailySales = () => {
     queryFn: () => productsService.getAll({ isActive: true, limit: 100 }),
   });
 
+  // Calculate billsAmount from actual bills array
+  const billsAmount = (existingDailySales?.bills || []).reduce(
+    (sum: number, bill: any) =>
+      sum + parseFloat(bill.amount?.toString() || "0"),
+    0
+  );
+
   const isFinalized = existingDailySales?.status === "finalized";
 
-  // ✅ CRITICAL FIX: Calculation helper functions (properly defined)
+  // Calculation helper functions
   const calculateTotalSales = () => {
     if (!productsData?.products) return 0;
 
@@ -111,8 +114,8 @@ export const DailySales = () => {
     const airtelMoney = parseFloat(String(revenueData.airtelMoney)) || 0;
     const mpamba = parseFloat(String(revenueData.mpamba)) || 0;
     const bank = parseFloat(String(revenueData.bank)) || 0;
-    const billsAmount = existingDailySales?.billsAmount || 0;
 
+    // Use calculated billsAmount, not from backend
     return (
       totalSales - totalExpenses - airtelMoney - mpamba - bank - billsAmount
     );
@@ -121,13 +124,14 @@ export const DailySales = () => {
   // Initialize form when daily sales record is fetched
   useEffect(() => {
     if (existingDailySales) {
+      // NOTE: Do NOT include soldQuantity when setting frontend inventories state,
+      // and only keep the fields the API expects (DailyInventoryItem).
       setInventories(
         existingDailySales.inventories.map((inv: any) => ({
           productId: inv.productId,
           openingStock: inv.openingStock,
           stockIn: inv.stockIn,
           closingStock: inv.closingStock,
-          soldQuantity: inv.soldQuantity,
           productName: inv.product?.name,
           unit: inv.product?.unit,
           categoryId: inv.product?.categoryId,
@@ -207,8 +211,19 @@ export const DailySales = () => {
 
   const handleSave = () => {
     if (!existingDailySales) return;
+
+    // Ensure we send only the inventory fields the API accepts.
+    const payloadInventories = inventories.map(
+      ({ productId, openingStock, stockIn, closingStock }) => ({
+        productId,
+        openingStock,
+        stockIn,
+        closingStock,
+      })
+    );
+
     saveMutation.mutate({
-      inventories,
+      inventories: payloadInventories,
       expenses,
       stockPurchases,
       notes,
@@ -288,18 +303,18 @@ export const DailySales = () => {
         </div>
       </div>
 
-      {/* ✅ Bills Section - FIXED: Pass bills array properly */}
+      {/* Bills Section */}
       {existingDailySales && (
         <DailySalesBillsSection
           selectedDate={selectedDate}
           billsForDate={existingDailySales.bills || []}
-          billsAmount={existingDailySales.billsAmount || 0}
+          billsAmount={billsAmount}
           isDisabled={isFinalized}
           onBillCreated={() => refetchSales()}
         />
       )}
 
-      {/* ✅ Summary - FIXED: Pass proper calculated values */}
+      {/* Summary */}
       <DailySalesSummary
         totals={{
           totalSales: calculateTotalSales(),
@@ -310,10 +325,10 @@ export const DailySales = () => {
           cashAtHand: calculateCashAtHand(),
           inventories: inventories,
         }}
-        billsAmount={existingDailySales?.billsAmount || 0}
+        billsAmount={billsAmount}
       />
 
-      {/* ✅ Inventory Tracking */}
+      {/* Inventory Tracking */}
       <Card>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-gray-900 flex items-center">
@@ -357,7 +372,7 @@ export const DailySales = () => {
         )}
       </Card>
 
-      {/* ✅ Income Avenue (Revenue Collection) */}
+      {/* Income Avenue (Revenue Collection) */}
       <DailySalesRevenueForm
         revenue={revenueData}
         cashAtHand={calculateCashAtHand()}
@@ -365,14 +380,14 @@ export const DailySales = () => {
         isDisabled={isFinalized}
       />
 
-      {/* ✅ Expenses */}
+      {/* Expenses */}
       <DailySalesExpensesForm
         expenses={expenses}
         onExpensesChange={setExpenses}
         isDisabled={isFinalized}
       />
 
-      {/* ✅ Stock Purchases */}
+      {/* Stock Purchases */}
       <DailySalesStockPurchases
         stockPurchases={stockPurchases}
         products={productsData?.products || []}
@@ -380,7 +395,7 @@ export const DailySales = () => {
         isDisabled={isFinalized}
       />
 
-      {/* ✅ Notes */}
+      {/* Notes */}
       <Card>
         <h3 className="text-sm font-medium text-gray-700 mb-2">Notes</h3>
         <textarea
@@ -392,7 +407,7 @@ export const DailySales = () => {
         />
       </Card>
 
-      {/* ✅ Action Bar (Save/Finalize buttons at bottom) */}
+      {/* Action Bar */}
       {!isFinalized && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 flex justify-end space-x-4 z-10 lg:left-64">
           <Button
