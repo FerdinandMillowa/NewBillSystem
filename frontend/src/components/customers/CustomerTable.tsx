@@ -4,7 +4,8 @@ import {
   formatDate,
   formatPhoneNumber,
   getStatusBadgeColor,
-} from "../../utils/formatters";
+  formatCurrency,
+} from "../../utils/formatters"; // added formatCurrency
 import { Link } from "react-router-dom";
 import {
   CheckCircleIcon,
@@ -24,10 +25,10 @@ interface CustomerTableProps {
   onPageChange: (page: number) => void;
   onApprove?: (customer: Customer) => void;
   onDelete?: (customer: Customer) => void;
-  onEdit?: (customer: Customer) => void; // NEW: edit handler
+  onEdit?: (customer: Customer) => void;
   isApproving?: boolean;
   isDeleting?: boolean;
-  isEditing?: boolean; // NEW: editing state
+  isEditing?: boolean;
 }
 
 export const CustomerTable = ({
@@ -62,6 +63,10 @@ export const CustomerTable = ({
     );
   }
 
+  const showBalanceColumn = customers.some(
+    (c) => typeof c.balance === "number"
+  );
+
   return (
     <div>
       <div className="overflow-x-auto">
@@ -80,6 +85,13 @@ export const CustomerTable = ({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Created
               </th>
+
+              {showBalanceColumn && (
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Balance
+                </th>
+              )}
+
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
@@ -127,6 +139,13 @@ export const CustomerTable = ({
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {formatDate(customer.createdAt)}
                 </td>
+
+                {showBalanceColumn && (
+                  <td className="px-6 py-4 whitespace-nowrap text-right font-medium text-gray-900">
+                    {customer.balance ? formatCurrency(customer.balance) : "-"}
+                  </td>
+                )}
+
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                   <Link
                     to={`/customers/${customer.id}`}
@@ -181,7 +200,7 @@ export const CustomerTable = ({
         </table>
       </div>
 
-      {/* Pagination */}
+      {/* Pagination (unchanged) */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
           <div className="text-sm text-gray-700">

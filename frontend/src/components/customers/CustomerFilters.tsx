@@ -31,6 +31,7 @@ export const CustomerFilters = ({
           <option value="">All</option>
           <option value="approved">Approved</option>
           <option value="pending">Pending</option>
+          <option value="with_balance">With Outstanding Balance</option>
         </select>
       </div>
     </div>

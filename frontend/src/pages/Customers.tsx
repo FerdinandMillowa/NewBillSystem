@@ -30,7 +30,7 @@ export const Customers = () => {
     limit: 10,
   });
 
-  // Clean filters helper - removes empty strings
+  // Clean filters helper - removes empty strings and transforms with_balance status
   const cleanFilters = (filters: any) => {
     const cleaned: any = {};
     Object.keys(filters).forEach((key) => {
@@ -42,6 +42,13 @@ export const Customers = () => {
         cleaned[key] = filters[key];
       }
     });
+
+    // Map the front-end "with_balance" status into a dedicated flag the backend understands:
+    if (cleaned.status === "with_balance") {
+      cleaned.withBalance = true;
+      delete cleaned.status;
+    }
+
     return cleaned;
   };
 
@@ -175,30 +182,66 @@ export const Customers = () => {
     setFilters((prev) => ({ ...prev, page }));
   };
 
+  const handleStatCardClick = (statName: string) => {
+    if (statName === "With Balance") {
+      setFilters({
+        search: "",
+        status: "with_balance",
+        page: 1,
+        limit: filters.limit,
+      });
+    } else if (statName === "Approved") {
+      setFilters({
+        search: "",
+        status: "approved",
+        page: 1,
+        limit: filters.limit,
+      });
+    } else if (statName === "Pending") {
+      setFilters({
+        search: "",
+        status: "pending",
+        page: 1,
+        limit: filters.limit,
+      });
+    } else if (statName === "Total Customers") {
+      setFilters({
+        search: "",
+        status: "",
+        page: 1,
+        limit: filters.limit,
+      });
+    }
+  };
+
   const statCards = [
     {
       name: "Total Customers",
       value: stats?.total || 0,
       icon: UserGroupIcon,
       color: "bg-blue-500",
+      clickable: true,
     },
     {
       name: "Approved",
       value: stats?.approved || 0,
       icon: CheckCircleIcon,
       color: "bg-green-500",
+      clickable: true,
     },
     {
       name: "Pending",
       value: stats?.pending || 0,
       icon: ClockIcon,
       color: "bg-yellow-500",
+      clickable: true,
     },
     {
       name: "With Balance",
       value: stats?.withOutstandingBalance || 0,
       icon: UserGroupIcon,
       color: "bg-red-500",
+      clickable: true,
     },
   ];
 
@@ -263,7 +306,15 @@ export const Customers = () => {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {statCards.map((stat) => (
-          <Card key={stat.name}>
+          <Card
+            key={stat.name}
+            onClick={() => stat.clickable && handleStatCardClick(stat.name)}
+            className={
+              stat.clickable
+                ? "cursor-pointer hover:shadow-lg transition-shadow duration-200"
+                : ""
+            }
+          >
             <div className="flex items-center">
               <div className={`p-3 rounded-lg ${stat.color}`}>
                 <stat.icon className="w-6 h-6 text-white" />

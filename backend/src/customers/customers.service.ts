@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Customer } from '../database/entities/customer.entity';
 import { Bill } from '../database/entities/bill.entity';
 import { Payment } from '../database/entities/payment.entity';
@@ -54,8 +54,74 @@ export class CustomersService {
     page: number;
     limit: number;
   }> {
-    const { search, status, page = 1, limit = 10 } = queryDto;
+    const { search, status, page = 1, limit = 10, withBalance } = queryDto;
 
+    const skip = (page - 1) * limit;
+
+    // If client asks for customers with outstanding balances, handle separately.
+    if (withBalance) {
+      // 1) Build aggregator query to get customers with (sum(bill.amount) - sum(payment.amount)) > 0
+      let aggQb = this.customerRepository
+        .createQueryBuilder('customer')
+        .leftJoin('customer.bills', 'bill')
+        .leftJoin('customer.payments', 'payment')
+        .select('customer.id', 'id')
+        .addSelect('COALESCE(SUM(bill.amount), 0)', 'totalBills')
+        .addSelect('COALESCE(SUM(payment.amount), 0)', 'totalPayments')
+        .groupBy('customer.id')
+        .having(
+          'COALESCE(SUM(bill.amount), 0) - COALESCE(SUM(payment.amount), 0) > 0',
+        );
+
+      // Apply search if provided (name/email/phone)
+      if (search) {
+        // apply where on customer columns
+        aggQb = aggQb.andWhere(
+          '(customer.firstName ILIKE :search OR customer.lastName ILIKE :search OR customer.email ILIKE :search OR customer.phone ILIKE :search)',
+          { search: `%${search}%` },
+        );
+      }
+
+      // Get total count (number of customers matching aggregator)
+      const totalAgg = await aggQb.getRawMany();
+      const total = totalAgg.length;
+
+      // Get the paginated aggregated rows (ids + totals)
+      const rawPaged = await aggQb.skip(skip).take(limit).getRawMany();
+
+      const ids = rawPaged.map((r) => r.id);
+
+      // Fetch the full customer entities for these ids preserving ordering by the array of ids
+      let customers: Customer[] = [];
+      if (ids.length > 0) {
+        customers = await this.customerRepository.find({
+          where: { id: In(ids) },
+        });
+
+        // Re-order customers to match ids order and attach balance
+        const customerById = new Map(customers.map((c) => [c.id, c]));
+        customers = ids.map((id) => {
+          const c = customerById.get(id)!;
+          // attach balance computed from rawPaged
+          const row = rawPaged.find((r) => r.id === id);
+          const totalBills = parseFloat(row?.totalBills || '0');
+          const totalPayments = parseFloat(row?.totalPayments || '0');
+          // Create a new object with the balance property
+          const customerWithBalance = Object.assign({}, c);
+          (customerWithBalance as any).balance = totalBills - totalPayments;
+          return customerWithBalance;
+        });
+      }
+
+      return {
+        customers,
+        total,
+        page,
+        limit,
+      };
+    }
+
+    // Default behavior (no withBalance filter)
     const queryBuilder = this.customerRepository.createQueryBuilder('customer');
 
     // Search by name, email, or phone
@@ -72,7 +138,6 @@ export class CustomersService {
     }
 
     // Pagination
-    const skip = (page - 1) * limit;
     queryBuilder.skip(skip).take(limit);
 
     // Order by creation date
