@@ -124,14 +124,13 @@ export const DailySales = () => {
   // Initialize form when daily sales record is fetched
   useEffect(() => {
     if (existingDailySales) {
-      // NOTE: Do NOT include soldQuantity when setting frontend inventories state,
-      // and only keep the fields the API expects (DailyInventoryItem).
       setInventories(
         existingDailySales.inventories.map((inv: any) => ({
           productId: inv.productId,
           openingStock: inv.openingStock,
           stockIn: inv.stockIn,
           closingStock: inv.closingStock,
+          soldQuantity: inv.soldQuantity,
           productName: inv.product?.name,
           unit: inv.product?.unit,
           categoryId: inv.product?.categoryId,
@@ -211,19 +210,8 @@ export const DailySales = () => {
 
   const handleSave = () => {
     if (!existingDailySales) return;
-
-    // Ensure we send only the inventory fields the API accepts.
-    const payloadInventories = inventories.map(
-      ({ productId, openingStock, stockIn, closingStock }) => ({
-        productId,
-        openingStock,
-        stockIn,
-        closingStock,
-      })
-    );
-
     saveMutation.mutate({
-      inventories: payloadInventories,
+      inventories,
       expenses,
       stockPurchases,
       notes,

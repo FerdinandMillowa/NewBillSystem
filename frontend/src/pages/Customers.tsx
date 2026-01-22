@@ -5,6 +5,7 @@ import type { Customer } from "../types/customer.types";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { CreateCustomerModal } from "../components/customers/CreateCustomerModal";
+import { EditCustomerModal } from "../components/customers/EditCustomerModal";
 import { CustomerTable } from "../components/customers/CustomerTable";
 import { CustomerFilters } from "../components/customers/CustomerFilters";
 import { useAuth } from "../context/AuthContext";
@@ -20,6 +21,8 @@ export const Customers = () => {
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [filters, setFilters] = useState({
     search: "",
     status: "",
@@ -104,6 +107,29 @@ export const Customers = () => {
     },
   });
 
+  // Edit customer mutation (admin only)
+  const editMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Customer> }) =>
+      customersService.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["pending-customers"] });
+      toast.success("Customer updated successfully!");
+      setIsEditModalOpen(false);
+      setEditingCustomer(null);
+    },
+    onError: (error: any) => {
+      if (error?.response?.status === 403) {
+        toast.error("You don't have permission to edit customers");
+      } else {
+        toast.error(
+          error.response?.data?.message || "Failed to update customer"
+        );
+      }
+    },
+  });
+
   const handleApprove = (customer: Customer) => {
     if (!isAdmin) {
       toast.error("Only administrators can approve customers");
@@ -125,6 +151,20 @@ export const Customers = () => {
     ) {
       deleteMutation.mutate(customer.id);
     }
+  };
+
+  const handleStartEdit = (customer: Customer) => {
+    if (!isAdmin) {
+      toast.error("Only administrators can edit customers");
+      return;
+    }
+    setEditingCustomer(customer);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSubmitEdit = (data: Partial<Customer>) => {
+    if (!editingCustomer) return;
+    editMutation.mutate({ id: editingCustomer.id, data });
   };
 
   const handleFilterChange = (newFilters: Partial<typeof filters>) => {
@@ -256,8 +296,10 @@ export const Customers = () => {
           onPageChange={handlePageChange}
           onApprove={isAdmin ? handleApprove : undefined}
           onDelete={isAdmin ? handleDelete : undefined}
+          onEdit={isAdmin ? handleStartEdit : undefined}
           isApproving={approveMutation.isPending}
           isDeleting={deleteMutation.isPending}
+          isEditing={editMutation.isPending}
         />
       </Card>
 
@@ -266,6 +308,20 @@ export const Customers = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
       />
+
+      {/* Edit Modal (admin) */}
+      {editingCustomer && (
+        <EditCustomerModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setEditingCustomer(null);
+          }}
+          customer={editingCustomer}
+          onSubmit={handleSubmitEdit}
+          isLoading={editMutation.isPending}
+        />
+      )}
     </div>
   );
 };

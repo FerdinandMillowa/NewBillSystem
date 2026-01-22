@@ -1,7 +1,6 @@
 import { Fragment, useState } from "react";
 import { Card } from "../ui/Card";
 import { formatCurrency } from "../../utils/formatters";
-// ✅ FIXED: Using product.types to match productsData
 import type { Product, ProductCategory } from "../../types/product.types";
 import type { DailyInventoryItem } from "../../types/daily-sales.types";
 
@@ -20,7 +19,7 @@ export const DailySalesInventoryGrid = ({
   onInventoriesChange,
   isDisabled = false,
 }: DailySalesInventoryGridProps) => {
-  // ✅ ADDED: Null checks for products and categories
+  // Null checks for products and categories
   if (!products || products.length === 0) {
     return (
       <Card title="Product Inventory & Sales">
@@ -198,20 +197,11 @@ export const DailySalesInventoryGrid = ({
                             <td className="px-4 py-3 text-sm font-medium text-gray-900">
                               {product.name}
                             </td>
+                            {/* ✅ FIXED: Opening Stock - Read-Only */}
                             <td className="px-4 py-3 text-center">
-                              <input
-                                type="number"
-                                value={inv.openingStock}
-                                onChange={(e) =>
-                                  handleInventoryChange(
-                                    product.id,
-                                    "openingStock",
-                                    +e.target.value
-                                  )
-                                }
-                                disabled={isDisabled}
-                                className="w-16 p-1 border rounded text-center"
-                              />
+                              <div className="w-16 p-1 bg-gray-100 border border-gray-300 rounded text-center text-gray-700 font-medium">
+                                {inv.openingStock}
+                              </div>
                             </td>
                             <td className="px-4 py-3 text-center">
                               <input

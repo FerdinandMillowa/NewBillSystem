@@ -11,6 +11,7 @@ import {
   XCircleIcon,
   TrashIcon,
   EyeIcon,
+  PencilIcon,
 } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 
@@ -23,8 +24,10 @@ interface CustomerTableProps {
   onPageChange: (page: number) => void;
   onApprove?: (customer: Customer) => void;
   onDelete?: (customer: Customer) => void;
+  onEdit?: (customer: Customer) => void; // NEW: edit handler
   isApproving?: boolean;
   isDeleting?: boolean;
+  isEditing?: boolean; // NEW: editing state
 }
 
 export const CustomerTable = ({
@@ -36,8 +39,10 @@ export const CustomerTable = ({
   onPageChange,
   onApprove,
   onDelete,
+  onEdit,
   isApproving,
   isDeleting,
+  isEditing,
 }: CustomerTableProps) => {
   const totalPages = Math.ceil(total / limit);
 
@@ -129,6 +134,18 @@ export const CustomerTable = ({
                   >
                     <EyeIcon className="w-4 h-4" />
                   </Link>
+
+                  {onEdit && (
+                    <button
+                      onClick={() => onEdit(customer)}
+                      disabled={isEditing}
+                      className="text-gray-600 hover:text-gray-900 inline-flex items-center disabled:opacity-50"
+                      title="Edit"
+                    >
+                      <PencilIcon className="w-4 h-4" />
+                    </button>
+                  )}
+
                   {onApprove && (
                     <button
                       onClick={() => onApprove(customer)}
