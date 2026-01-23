@@ -60,6 +60,10 @@ export class CustomersService {
 
     // If client asks for customers with outstanding balances, handle separately.
     if (withBalance) {
+      console.log('==========================================');
+      console.log('withBalance:', withBalance, 'type:', typeof withBalance);
+      console.log('page:', page, 'skip:', skip, 'limit:', limit);
+
       // 1) Build aggregator query to get customers with (sum(bill.amount) - sum(payment.amount)) > 0
       let aggQb = this.customerRepository
         .createQueryBuilder('customer')
@@ -71,11 +75,11 @@ export class CustomersService {
         .groupBy('customer.id')
         .having(
           'COALESCE(SUM(bill.amount), 0) - COALESCE(SUM(payment.amount), 0) > 0',
-        );
+        )
+        .orderBy('customer.createdAt', 'DESC'); // Add ordering for consistency
 
       // Apply search if provided (name/email/phone)
       if (search) {
-        // apply where on customer columns
         aggQb = aggQb.andWhere(
           '(customer.firstName ILIKE :search OR customer.lastName ILIKE :search OR customer.email ILIKE :search OR customer.phone ILIKE :search)',
           { search: `%${search}%` },
@@ -85,20 +89,31 @@ export class CustomersService {
       // Get total count (number of customers matching aggregator)
       const totalAgg = await aggQb.getRawMany();
       const total = totalAgg.length;
+      console.log('Total customers with balance:', total);
 
-      // Get the paginated aggregated rows (ids + totals)
-      const rawPaged = await aggQb.skip(skip).take(limit).getRawMany();
+      // CRITICAL FIX: Use limit() and offset() instead of skip() and take()
+      // for aggregated queries with GROUP BY and HAVING
+      console.log('Applying offset:', skip, 'limit:', limit);
+      const rawPaged = await aggQb.limit(limit).offset(skip).getRawMany();
+
+      console.log('rawPaged length:', rawPaged.length);
+      console.log(
+        'rawPaged IDs:',
+        rawPaged.map((r) => r.id),
+      );
 
       const ids = rawPaged.map((r) => r.id);
 
-      // Fetch the full customer entities for these ids preserving ordering by the array of ids
+      // Fetch the full customer entities for these ids preserving ordering
       let customers: Customer[] = [];
       if (ids.length > 0) {
         customers = await this.customerRepository.find({
           where: { id: In(ids) },
         });
 
-        // Re-order customers to match ids order and attach balance
+        console.log('Fetched customers count:', customers.length);
+
+        // Re-order customers to match the exact order from rawPaged
         const customerById = new Map(customers.map((c) => [c.id, c]));
         customers = ids.map((id) => {
           const c = customerById.get(id)!;
@@ -106,12 +121,21 @@ export class CustomersService {
           const row = rawPaged.find((r) => r.id === id);
           const totalBills = parseFloat(row?.totalBills || '0');
           const totalPayments = parseFloat(row?.totalPayments || '0');
+          const balance = totalBills - totalPayments;
+
+          console.log(
+            `Customer ${id}: bills=${totalBills}, payments=${totalPayments}, balance=${balance}`,
+          );
+
           // Create a new object with the balance property
           const customerWithBalance = Object.assign({}, c);
-          (customerWithBalance as any).balance = totalBills - totalPayments;
+          (customerWithBalance as any).balance = balance;
           return customerWithBalance;
         });
       }
+
+      console.log('Final customers to return:', customers.length);
+      console.log('==========================================');
 
       return {
         customers,
@@ -122,6 +146,7 @@ export class CustomersService {
     }
 
     // Default behavior (no withBalance filter)
+    console.log('Regular query - withBalance:', withBalance);
     const queryBuilder = this.customerRepository.createQueryBuilder('customer');
 
     // Search by name, email, or phone
@@ -144,6 +169,13 @@ export class CustomersService {
     queryBuilder.orderBy('customer.createdAt', 'DESC');
 
     const [customers, total] = await queryBuilder.getManyAndCount();
+
+    console.log(
+      'Regular query results - total:',
+      total,
+      'customers:',
+      customers.length,
+    );
 
     return {
       customers,

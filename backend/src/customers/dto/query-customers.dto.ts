@@ -1,12 +1,5 @@
-import {
-  IsOptional,
-  IsEnum,
-  IsString,
-  IsInt,
-  Min,
-  IsBoolean,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsOptional, IsEnum, IsString, IsInt, Min } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 import { CustomerStatus } from '../../common/enums';
 
 export class QueryCustomersDto {
@@ -19,9 +12,12 @@ export class QueryCustomersDto {
   status?: CustomerStatus;
 
   @IsOptional()
-  @IsBoolean()
-  @Type(() => Boolean)
-  withBalance?: boolean; // NEW
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  withBalance?: boolean;
 
   @IsOptional()
   @Type(() => Number)
