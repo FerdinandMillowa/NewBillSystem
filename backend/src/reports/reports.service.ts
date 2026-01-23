@@ -9,9 +9,10 @@ import { DailyInventory } from '../database/entities/daily-inventory.entity';
 import { DailyExpense } from '../database/entities/daily-expense.entity';
 import { Product } from '../database/entities/product.entity';
 import { ProductCategory } from '../database/entities/product-category.entity';
+import { StockPurchase } from '../database/entities/stock-purchase.entity';
 import { CustomerStatus } from '../common/enums';
 import { DateRangeDto } from './dto/date-range.dto';
-import { format, subDays } from 'date-fns';
+import { format, subDays, parseISO, startOfDay, endOfDay } from 'date-fns';
 
 export interface OutstandingBalance {
   customerId: string;
@@ -49,6 +50,8 @@ export class ReportsService {
     private productRepository: Repository<Product>,
     @InjectRepository(ProductCategory)
     private productCategoryRepository: Repository<ProductCategory>,
+    @InjectRepository(StockPurchase)
+    private stockPurchaseRepository: Repository<StockPurchase>,
   ) {}
 
   async getDashboardStats(): Promise<any> {
@@ -219,7 +222,7 @@ export class ReportsService {
     payments.forEach((payment) => {
       const method = payment.paymentMethod?.toLowerCase() || 'cash';
       const amount = parseFloat(payment.amount?.toString() || '0');
-      
+
       // Map payment method to our categories
       let mappedMethod = 'cash';
       if (method.includes('airtel') || method.includes('airtel_money')) {
@@ -231,7 +234,7 @@ export class ReportsService {
       } else if (method === 'cash') {
         mappedMethod = 'cash';
       }
-      
+
       if (methodTotals.hasOwnProperty(mappedMethod)) {
         methodTotals[mappedMethod] += amount;
       } else {
@@ -241,7 +244,7 @@ export class ReportsService {
     });
 
     const total = methodTotals.total;
-    
+
     const breakdown = [
       {
         method: 'cash',
@@ -731,62 +734,139 @@ export class ReportsService {
     };
   }
 
+  /**
+   * Daily sales summary for a date range (used by Reports controller)
+   * This now includes stock purchases (separate from other expenses) and subtracts them from netRevenue.
+   */
   async getDailySalesSummary(
     startDate?: string,
     endDate?: string,
   ): Promise<any> {
-    // FIX: Add default date range if not provided
-    let finalStartDate: Date;
-    let finalEndDate: Date;
+    // Deterministic date parsing:
+    // - if client passed a YYYY-MM-DD string, parseISO will interpret it as local date;
+    // - then startOfDay/endOfDay set exact day boundaries (local timezone) consistently.
+    const now = new Date();
+    const defaultEnd = endOfDay(now);
+    const defaultStart = startOfDay(
+      new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+    ); // last 30 days
 
-    if (startDate && endDate) {
-      finalStartDate = new Date(startDate);
-      finalEndDate = new Date(endDate);
-    } else {
-      // Default to last 7 days
-      finalEndDate = new Date();
-      finalStartDate = subDays(finalEndDate, 7);
-    }
+    const parsedStart = startDate
+      ? startOfDay(parseISO(startDate))
+      : defaultStart;
+    const parsedEnd = endDate ? endOfDay(parseISO(endDate)) : defaultEnd;
 
-    const sales = await this.dailySalesRepository.find({
+    // Use the same start/end for every DB call
+    const start = parsedStart;
+    const end = parsedEnd;
+
+    // Fetch dailySales records in range (with relations including stockPurchases)
+    const dailySalesRecords = await this.dailySalesRepository.find({
       where: {
-        date: Between(finalStartDate, finalEndDate),
+        date: Between(start, end),
       },
-      order: { date: 'ASC' },
+      order: {
+        date: 'ASC',
+      },
+      relations: ['inventories', 'expenses', 'stockPurchases'],
     });
 
-    const totalSales = sales.reduce(
-      (sum, s) => sum + parseFloat(s.totalSales?.toString() || '0'),
+    // Totals from dailySales
+    const totalSales = dailySalesRecords.reduce(
+      (sum, s) => sum + (parseFloat((s.totalSales || 0).toString()) || 0),
       0,
     );
-    const totalCollected = sales.reduce(
-      (sum, s) => sum + parseFloat(s.totalCollected?.toString() || '0'),
+
+    const totalExpenses = dailySalesRecords.reduce(
+      (sum, s) => sum + (parseFloat((s.totalExpenses || 0).toString()) || 0),
       0,
     );
-    const totalExpenses = sales.reduce(
-      (sum, s) => sum + parseFloat(s.totalExpenses?.toString() || '0'),
+
+    const totalCollected = dailySalesRecords.reduce(
+      (sum, s) => sum + (parseFloat((s.totalCollected || 0).toString()) || 0),
       0,
     );
-    const totalNetRevenue = sales.reduce(
-      (sum, s) => sum + parseFloat(s.netRevenue?.toString() || '0'),
-      0,
-    );
+
+    // Aggregate ALL stock purchases that were created in the same start..end window
+    // Use the same start/end values for BETWEEN to avoid timezone drift
+    const stockPurchasesRaw = await this.stockPurchaseRepository
+      .createQueryBuilder('sp')
+      .select('COALESCE(SUM(sp.totalCost), 0)', 'total')
+      .where('sp.createdAt BETWEEN :start AND :end', { start, end })
+      .getRawOne();
+
+    const totalStockPurchases = parseFloat(stockPurchasesRaw?.total || '0');
+
+    // total net revenue subtracting stock purchases
+    const totalNetRevenue = totalSales - totalExpenses - totalStockPurchases;
+
+    // Build map of stock purchases linked to dailySales (by dailySales.id)
+    const stockByDaily = new Map<string, number>();
+    for (const ds of dailySalesRecords) {
+      if (ds.stockPurchases && ds.stockPurchases.length > 0) {
+        const sum = ds.stockPurchases.reduce(
+          (acc, sp) => acc + (parseFloat((sp.totalCost || 0).toString()) || 0),
+          0,
+        );
+        stockByDaily.set(ds.id, sum);
+      }
+    }
+
+    // Group any UNLINKED stock purchases by DATE(sp.createdAt)
+    // We normalize the DB day to 'YYYY-MM-DD' when building the map
+    const unlinkedStockRows = await this.stockPurchaseRepository
+      .createQueryBuilder('sp')
+      // Using DATE(sp.created_at) returns date (no time); this avoids timezone rounding issues
+      .select("TO_CHAR(DATE(sp.created_at), 'YYYY-MM-DD')", 'day')
+      .addSelect('COALESCE(SUM(sp.total_cost),0)', 'total')
+      .where('sp.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere('sp.daily_sales_id IS NULL')
+      .groupBy("TO_CHAR(DATE(sp.created_at), 'YYYY-MM-DD')")
+      .getRawMany();
+
+    const unlinkedByDay = new Map<string, number>();
+    for (const r of unlinkedStockRows) {
+      // r.day is already formatted 'YYYY-MM-DD'
+      const day = r.day;
+      unlinkedByDay.set(day, parseFloat(r.total || '0'));
+    }
+
+    // Build dailyBreakdown using normalized date strings 'YYYY-MM-DD'
+    const dailyBreakdown = dailySalesRecords.map((ds) => {
+      const dateStr = format(ds.date, 'yyyy-MM-dd');
+
+      const stockLinked = stockByDaily.get(ds.id) || 0;
+      const stockUnlinked = unlinkedByDay.get(dateStr) || 0;
+      const stockTotalForDay = stockLinked + stockUnlinked;
+
+      const dsTotalSales = parseFloat((ds.totalSales || 0).toString()) || 0;
+      const dsTotalExpenses =
+        parseFloat((ds.totalExpenses || 0).toString()) || 0;
+      const dsTotalCollected =
+        parseFloat((ds.totalCollected || 0).toString()) || 0;
+      const dsBills = parseFloat((ds.billsAmount || 0).toString()) || 0;
+
+      return {
+        date: dateStr,
+        totalSales: dsTotalSales,
+        billsAmount: dsBills,
+        totalPayments: dsTotalCollected,
+        totalExpenses: dsTotalExpenses,
+        stockPurchasesAmount: stockTotalForDay,
+        netRevenue: dsTotalSales - dsTotalExpenses - stockTotalForDay,
+      };
+    });
 
     return {
       summary: {
         totalSales,
         totalCollected,
         totalExpenses,
+        totalStockPurchases,
         totalNetRevenue,
-        totalDays: sales.length,
+        days: dailyBreakdown.length,
       },
-      dailyBreakdown: sales.map((s) => ({
-        date: format(s.date, 'yyyy-MM-dd'),
-        totalSales: parseFloat(s.totalSales?.toString() || '0'),
-        totalCollected: parseFloat(s.totalCollected?.toString() || '0'),
-        totalExpenses: parseFloat(s.totalExpenses?.toString() || '0'),
-        netRevenue: parseFloat(s.netRevenue?.toString() || '0'),
-      })),
+      dailyBreakdown,
     };
   }
 }

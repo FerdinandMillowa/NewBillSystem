@@ -263,21 +263,22 @@ export const Reports = () => {
                   }}
                 />
                 <Legend />
+                {/* SIGNIFICANT CHANGE: Plot billsAmount and paymentsAmount (billing domain) */}
                 <Line
                   type="monotone"
-                  dataKey="totalSales"
+                  dataKey="billsAmount"
                   stroke="#8b5cf6"
                   strokeWidth={2}
-                  name="Total Sales"
+                  name="Bills"
                   dot={{ r: 4, fill: "#8b5cf6" }}
                   activeDot={{ r: 6 }}
                 />
                 <Line
                   type="monotone"
-                  dataKey="totalCollected"
+                  dataKey="paymentsAmount"
                   stroke="#10b981"
                   strokeWidth={2}
-                  name="Collected"
+                  name="Payments"
                   dot={{ r: 4, fill: "#10b981" }}
                   activeDot={{ r: 6 }}
                 />
@@ -334,7 +335,7 @@ export const Reports = () => {
   const renderOperationsTab = () => (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         <Card>
           <div className="flex items-center justify-between">
             <div>
@@ -343,7 +344,7 @@ export const Reports = () => {
                 {formatCurrency(dailySalesSummary?.summary?.totalSales || 0)}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                {dailySalesSummary?.summary?.totalDays || 0} days
+                {dailySalesSummary?.summary?.days || 0} days
               </p>
             </div>
             <div className="p-3 rounded-lg bg-blue-500">
@@ -384,16 +385,41 @@ export const Reports = () => {
           </div>
         </Card>
 
+        {/* NEW Stock Purchases Card */}
+        <Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Stock Purchases</p>
+              <p className="text-2xl font-bold text-indigo-600 mt-2">
+                {formatCurrency(
+                  dailySalesSummary?.summary?.totalStockPurchases || 0
+                )}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Purchases within range
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-indigo-500">
+              <ShoppingBagIcon className="w-6 h-6 text-white" />
+            </div>
+          </div>
+        </Card>
+
         <Card>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Net Revenue</p>
               <p className="text-2xl font-bold text-purple-600 mt-2">
                 {formatCurrency(
-                  dailySalesSummary?.summary?.totalNetRevenue || 0
+                  dailySalesSummary?.summary?.totalNetRevenue ??
+                    (dailySalesSummary?.summary?.totalSales || 0) -
+                      (dailySalesSummary?.summary?.totalExpenses || 0) -
+                      (dailySalesSummary?.summary?.totalStockPurchases || 0)
                 )}
               </p>
-              <p className="text-xs text-gray-500 mt-1">Profit</p>
+              <p className="text-xs text-gray-500 mt-1">
+                After expenses & stock
+              </p>
             </div>
             <div className="p-3 rounded-lg bg-purple-500">
               <CurrencyDollarIcon className="w-6 h-6 text-white" />

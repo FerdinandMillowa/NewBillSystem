@@ -10,6 +10,7 @@ import { DailyInventory } from '../database/entities/daily-inventory.entity';
 import { DailyExpense } from '../database/entities/daily-expense.entity';
 import { Product } from '../database/entities/product.entity';
 import { ProductCategory } from '../database/entities/product-category.entity';
+import { StockPurchase } from 'src/database/entities';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ProductCategory } from '../database/entities/product-category.entity';
       DailyExpense,
       Product,
       ProductCategory,
+      StockPurchase,
     ]),
   ],
   controllers: [ReportsController],
