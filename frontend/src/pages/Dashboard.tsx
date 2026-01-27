@@ -333,21 +333,22 @@ export const Dashboard = () => {
                     labelStyle={{ color: "#000" }}
                   />
                   <Legend />
+                  {/* SIGNIFICANT CHANGE: Plot billsAmount and paymentsAmount (billing domain) */}
                   <Line
                     type="monotone"
-                    dataKey="totalSales"
+                    dataKey="billsAmount"
                     stroke="#8b5cf6"
                     strokeWidth={2}
-                    name="Total Sales"
+                    name="Bills"
                     dot={{ r: 4, fill: "#8b5cf6" }}
                     activeDot={{ r: 6 }}
                   />
                   <Line
                     type="monotone"
-                    dataKey="totalCollected"
+                    dataKey="paymentsAmount"
                     stroke="#10b981"
                     strokeWidth={2}
-                    name="Collected"
+                    name="Payments"
                     dot={{ r: 4, fill: "#10b981" }}
                     activeDot={{ r: 6 }}
                   />
