@@ -742,9 +742,7 @@ export class ReportsService {
     startDate?: string,
     endDate?: string,
   ): Promise<any> {
-    // Deterministic date parsing:
-    // - if client passed a YYYY-MM-DD string, parseISO will interpret it as local date;
-    // - then startOfDay/endOfDay set exact day boundaries (local timezone) consistently.
+    // Parse dates consistently
     const now = new Date();
     const defaultEnd = endOfDay(now);
     const defaultStart = startOfDay(
@@ -756,11 +754,10 @@ export class ReportsService {
       : defaultStart;
     const parsedEnd = endDate ? endOfDay(parseISO(endDate)) : defaultEnd;
 
-    // Use the same start/end for every DB call
     const start = parsedStart;
     const end = parsedEnd;
 
-    // Fetch dailySales records in range (with relations including stockPurchases)
+    // OPTIMIZATION 1: Fetch daily sales WITHOUT relations first (faster query)
     const dailySalesRecords = await this.dailySalesRepository.find({
       where: {
         date: Between(start, end),
@@ -768,10 +765,46 @@ export class ReportsService {
       order: {
         date: 'ASC',
       },
-      relations: ['inventories', 'expenses', 'stockPurchases'],
     });
 
-    // Totals from dailySales
+    // Early return if no data - avoid unnecessary queries
+    if (dailySalesRecords.length === 0) {
+      return {
+        summary: {
+          totalSales: 0,
+          totalCollected: 0,
+          totalExpenses: 0,
+          totalStockPurchases: 0,
+          totalNetRevenue: 0,
+          days: 0,
+        },
+        dailyBreakdown: [],
+      };
+    }
+
+    // Extract daily sales IDs for batched queries
+    const dailySalesIds = dailySalesRecords.map((ds) => ds.id);
+
+    // ✅ FIX: Query stock purchases by daily_sales_id, not by created_at
+    const stockPurchases = await this.stockPurchaseRepository
+      .createQueryBuilder('sp')
+      .where('sp.daily_sales_id IN (:...ids)', { ids: dailySalesIds })
+      .getMany();
+
+    // Build map of stock purchases by daily_sales_id
+    const stockByDailySalesId = new Map<string, number>();
+    stockPurchases.forEach((sp) => {
+      const dailySalesId = sp.dailySalesId;
+      if (dailySalesId) {
+        const current = stockByDailySalesId.get(dailySalesId) || 0;
+        stockByDailySalesId.set(
+          dailySalesId,
+          current + (parseFloat((sp.totalCost || 0).toString()) || 0),
+        );
+      }
+    });
+
+    // Calculate totals
     const totalSales = dailySalesRecords.reduce(
       (sum, s) => sum + (parseFloat((s.totalSales || 0).toString()) || 0),
       0,
@@ -787,57 +820,18 @@ export class ReportsService {
       0,
     );
 
-    // Aggregate ALL stock purchases that were created in the same start..end window
-    // Use the same start/end values for BETWEEN to avoid timezone drift
-    const stockPurchasesRaw = await this.stockPurchaseRepository
-      .createQueryBuilder('sp')
-      .select('COALESCE(SUM(sp.totalCost), 0)', 'total')
-      .where('sp.createdAt BETWEEN :start AND :end', { start, end })
-      .getRawOne();
+    // Calculate total stock purchases from the map
+    const totalStockPurchases = Array.from(stockByDailySalesId.values()).reduce(
+      (sum, val) => sum + val,
+      0,
+    );
 
-    const totalStockPurchases = parseFloat(stockPurchasesRaw?.total || '0');
-
-    // total net revenue subtracting stock purchases
     const totalNetRevenue = totalSales - totalExpenses - totalStockPurchases;
 
-    // Build map of stock purchases linked to dailySales (by dailySales.id)
-    const stockByDaily = new Map<string, number>();
-    for (const ds of dailySalesRecords) {
-      if (ds.stockPurchases && ds.stockPurchases.length > 0) {
-        const sum = ds.stockPurchases.reduce(
-          (acc, sp) => acc + (parseFloat((sp.totalCost || 0).toString()) || 0),
-          0,
-        );
-        stockByDaily.set(ds.id, sum);
-      }
-    }
-
-    // Group any UNLINKED stock purchases by DATE(sp.createdAt)
-    // We normalize the DB day to 'YYYY-MM-DD' when building the map
-    const unlinkedStockRows = await this.stockPurchaseRepository
-      .createQueryBuilder('sp')
-      // Using DATE(sp.created_at) returns date (no time); this avoids timezone rounding issues
-      .select("TO_CHAR(DATE(sp.created_at), 'YYYY-MM-DD')", 'day')
-      .addSelect('COALESCE(SUM(sp.total_cost),0)', 'total')
-      .where('sp.createdAt BETWEEN :start AND :end', { start, end })
-      .andWhere('sp.daily_sales_id IS NULL')
-      .groupBy("TO_CHAR(DATE(sp.created_at), 'YYYY-MM-DD')")
-      .getRawMany();
-
-    const unlinkedByDay = new Map<string, number>();
-    for (const r of unlinkedStockRows) {
-      // r.day is already formatted 'YYYY-MM-DD'
-      const day = r.day;
-      unlinkedByDay.set(day, parseFloat(r.total || '0'));
-    }
-
-    // Build dailyBreakdown using normalized date strings 'YYYY-MM-DD'
+    // Build daily breakdown
     const dailyBreakdown = dailySalesRecords.map((ds) => {
       const dateStr = format(ds.date, 'yyyy-MM-dd');
-
-      const stockLinked = stockByDaily.get(ds.id) || 0;
-      const stockUnlinked = unlinkedByDay.get(dateStr) || 0;
-      const stockTotalForDay = stockLinked + stockUnlinked;
+      const stockTotalForDay = stockByDailySalesId.get(ds.id) || 0;
 
       const dsTotalSales = parseFloat((ds.totalSales || 0).toString()) || 0;
       const dsTotalExpenses =
