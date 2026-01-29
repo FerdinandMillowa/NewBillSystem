@@ -21,6 +21,18 @@ interface ProductsTableProps {
   isDeleting: boolean;
 }
 
+/**
+ * Helper function to check if a product should have shot linking capability
+ * Only products in "Spirits 750ml" category need shot links
+ */
+const shouldHaveShotLink = (product: Product): boolean => {
+  const categoryName = product.category?.name?.toLowerCase() || "";
+
+  // Check if category name contains "spirits" and "750ml"
+  // This makes it flexible for variations like "Spirits 750ml", "SPIRITS 750ML", etc.
+  return categoryName.includes("spirits") && categoryName.includes("750ml");
+};
+
 export const ProductsTable = ({
   products,
   isLoading,
@@ -78,6 +90,12 @@ export const ProductsTable = ({
           {products.map((product) => {
             const stockStatus = getStockStatus(product.currentStock);
 
+            // ✅ FIX: Only show "Needs Shot Link" for bottles in Spirits 750ml category
+            const needsShotLink =
+              product.unit === "bottle" &&
+              !product.linkedShotProductId &&
+              shouldHaveShotLink(product);
+
             return (
               <tr key={product.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -85,13 +103,12 @@ export const ProductsTable = ({
                     <div className="text-sm font-medium text-gray-900">
                       {formatProductName(product)}
                     </div>
-                    {/* Indicator for unlinked bottles */}
-                    {product.unit === "bottle" &&
-                      !product.linkedShotProductId && (
-                        <span className="inline-flex ml-2 px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                          Needs Shot Link
-                        </span>
-                      )}
+                    {/* ✅ Only show indicator for Spirits 750ml bottles without links */}
+                    {needsShotLink && (
+                      <span className="inline-flex ml-2 px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                        Needs Shot Link
+                      </span>
+                    )}
                   </div>
                   {product.shotsPerBottle && (
                     <div className="text-xs text-gray-500">

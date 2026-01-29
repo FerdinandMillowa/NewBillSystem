@@ -20,6 +20,16 @@ interface EditProductModalProps {
   categories: ProductCategory[];
 }
 
+/**
+ * Helper function to check if a product category supports shot conversion
+ * Only "Spirits 750ml" category needs shot linking capability
+ */
+const categorySupportsShots = (categoryName?: string): boolean => {
+  if (!categoryName) return false;
+  const name = categoryName.toLowerCase();
+  return name.includes("spirits") && name.includes("750ml");
+};
+
 export const EditProductModal = ({
   isOpen,
   onClose,
@@ -41,6 +51,7 @@ export const EditProductModal = ({
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<UpdateProductDto & { linkedShotProductId?: string }>({
     defaultValues: {
@@ -51,11 +62,17 @@ export const EditProductModal = ({
       currentPrice: product.currentPrice,
       currentStock: product.currentStock,
       shotsPerBottle: product.shotsPerBottle || undefined,
-      linkedShotProductId: product.linkedShotProductId || "", // Added field
+      linkedShotProductId: product.linkedShotProductId || "",
       notes: product.notes || "",
       isActive: product.isActive,
     },
   });
+
+  // Watch the selected category to determine if shot conversion should be shown
+  const selectedCategoryId = watch("categoryId");
+  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
+  const showShotConversion =
+    product.unit === "bottle" && categorySupportsShots(selectedCategory?.name);
 
   useEffect(() => {
     reset({
@@ -66,7 +83,7 @@ export const EditProductModal = ({
       currentPrice: product.currentPrice,
       currentStock: product.currentStock,
       shotsPerBottle: product.shotsPerBottle || undefined,
-      linkedShotProductId: product.linkedShotProductId || "", // Added field
+      linkedShotProductId: product.linkedShotProductId || "",
       notes: product.notes || "",
       isActive: product.isActive,
     });
@@ -210,8 +227,8 @@ export const EditProductModal = ({
                     </div>
                   </div>
 
-                  {/* ✅ Bottle-to-Shot Conversion Setup Section */}
-                  {product.unit === "bottle" && (
+                  {/* ✅ Bottle-to-Shot Conversion Setup - ONLY for Spirits 750ml */}
+                  {showShotConversion && (
                     <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                       <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
                         🔄 Bottle-to-Shot Conversion Setup
@@ -240,19 +257,8 @@ export const EditProductModal = ({
                           className="input"
                         >
                           <option value="">-- Select Shot Product --</option>
-                          {categories
-                            .filter(
-                              (cat) =>
-                                cat.name.toLowerCase().includes("shot") ||
-                                cat.name.toLowerCase().includes("drink")
-                            )
-                            .flatMap((cat) => {
-                              const shotProducts = allProducts.filter(
-                                (p) =>
-                                  p.categoryId === cat.id && p.unit === "shot"
-                              );
-                              return shotProducts;
-                            })
+                          {allProducts
+                            .filter((p) => p.unit === "shot")
                             .map((shotProduct) => (
                               <option
                                 key={shotProduct.id}
@@ -277,6 +283,16 @@ export const EditProductModal = ({
                           )?.name || "Unknown"}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* ✅ Info message when shot conversion is not available */}
+                  {product.unit === "bottle" && !showShotConversion && (
+                    <div className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        ℹ️ Bottle-to-shot conversion is only available for
+                        products in the "Spirits 750ml" category.
+                      </p>
                     </div>
                   )}
 

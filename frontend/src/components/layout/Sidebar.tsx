@@ -1,6 +1,6 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { Dialog, Transition } from "@headlessui/react";
+import { Dialog, Transition, Disclosure } from "@headlessui/react";
 import { useAuth } from "../../context/AuthContext";
 import {
   HomeIcon,
@@ -13,55 +13,87 @@ import {
   XMarkIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
   CubeIcon,
   ClockIcon,
   DocumentChartBarIcon,
+  BanknotesIcon,
+  BuildingStorefrontIcon,
 } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 
-const navigation = [
+// Navigation structure for regular users (flat)
+const userNavigation = [
   {
     name: "Quick Actions",
     href: "/quick-actions",
     icon: SparklesIcon,
     description: "Fast access to daily tasks",
-    adminOnly: false,
   },
-  { name: "Dashboard", href: "/dashboard", icon: HomeIcon, adminOnly: false },
-  { name: "Customers", href: "/customers", icon: UsersIcon, adminOnly: false },
-  { name: "Bills", href: "/bills", icon: DocumentTextIcon, adminOnly: false },
+  { name: "Dashboard", href: "/dashboard", icon: HomeIcon },
+  { name: "Customers", href: "/customers", icon: UsersIcon },
+  { name: "Bills", href: "/bills", icon: DocumentTextIcon },
+  { name: "Payments", href: "/payments", icon: CreditCardIcon },
+  { name: "Daily Sales", href: "/daily-sales", icon: DocumentChartBarIcon },
+];
+
+// Navigation structure for admins (grouped)
+const adminNavigation = [
   {
-    name: "Payments",
-    href: "/payments",
-    icon: CreditCardIcon,
-    adminOnly: false,
-  },
-  {
-    name: "Products",
-    href: "/products",
-    icon: CubeIcon,
-    adminOnly: true, // Only admins can access
-  },
-  {
-    name: "Daily Sales",
-    href: "/daily-sales",
-    icon: DocumentChartBarIcon,
-    adminOnly: false,
+    name: "Quick Actions",
+    href: "/quick-actions",
+    icon: SparklesIcon,
+    type: "link",
   },
   {
-    name: "User Management",
+    name: "Dashboard",
+    href: "/dashboard",
+    icon: HomeIcon,
+    type: "link",
+  },
+  {
+    name: "Billing Module",
+    icon: BanknotesIcon,
+    type: "group",
+    items: [
+      { name: "Customers", href: "/customers", icon: UsersIcon },
+      { name: "Bills", href: "/bills", icon: DocumentTextIcon },
+      { name: "Payments", href: "/payments", icon: CreditCardIcon },
+    ],
+  },
+  {
+    name: "Operations Module",
+    icon: BuildingStorefrontIcon,
+    type: "group",
+    items: [
+      { name: "Products", href: "/products", icon: CubeIcon },
+      { name: "Daily Sales", href: "/daily-sales", icon: DocumentChartBarIcon },
+    ],
+  },
+  {
+    name: "Users",
     href: "/users",
     icon: UsersIcon,
-    adminOnly: true, // Only admins can access
+    type: "link",
+  },
+  {
+    name: "Reports",
+    href: "/reports",
+    icon: ChartBarIcon,
+    type: "link",
   },
   {
     name: "Activity Logs",
     href: "/activity-logs",
     icon: ClockIcon,
-    adminOnly: true,
+    type: "link",
   },
-  { name: "Reports", href: "/reports", icon: ChartBarIcon, adminOnly: true },
-  { name: "Settings", href: "/settings", icon: Cog6ToothIcon, adminOnly: true },
+  {
+    name: "Settings",
+    href: "/settings",
+    icon: Cog6ToothIcon,
+    type: "link",
+  },
 ];
 
 interface SidebarProps {
@@ -78,8 +110,7 @@ export const Sidebar = ({
   onDesktopToggle,
 }: SidebarProps) => {
   const { isAdmin } = useAuth();
-
-  const filteredNav = navigation.filter((item) => !item.adminOnly || isAdmin);
+  const navigation = isAdmin ? adminNavigation : userNavigation;
 
   // Sidebar Content Component
   const SidebarContent = ({ isMobile = false }) => (
@@ -94,20 +125,19 @@ export const Sidebar = ({
                 alt="Pitch and Roll Logo"
                 className="w-6 h-6 object-contain"
                 onError={(e) => {
-                  // Fallback to SVG if image fails to load
                   e.currentTarget.style.display = "none";
                   const parent = e.currentTarget.parentElement;
                   if (parent) {
                     parent.innerHTML = `
-          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-        `;
+                      <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    `;
                   }
                 }}
               />
             </div>
-            {isDesktopOpen && (
+            {(isDesktopOpen || isMobile) && (
               <span className="ml-3 text-xl font-bold text-gray-900 dark:text-white">
                 Pitch&Roll
               </span>
@@ -141,30 +171,122 @@ export const Sidebar = ({
 
         {/* Navigation */}
         <nav className="flex-1 px-2 space-y-1">
-          {filteredNav.map((item) => (
-            <NavLink
-              key={item.name}
-              to={item.href}
-              onClick={isMobile ? onClose : undefined}
-              className={({ isActive }) =>
-                clsx(
-                  "group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors",
-                  isActive
-                    ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
-                )
+          {navigation.map((item) => {
+            // Regular link item
+            if (item.type === "link") {
+              return (
+                <NavLink
+                  key={item.name}
+                  to={item.href!}
+                  onClick={isMobile ? onClose : undefined}
+                  className={({ isActive }) =>
+                    clsx(
+                      "group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                      isActive
+                        ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+                    )
+                  }
+                >
+                  <item.icon
+                    className={clsx(
+                      "h-5 w-5 flex-shrink-0",
+                      isDesktopOpen || isMobile ? "mr-3" : "mx-auto"
+                    )}
+                    aria-hidden="true"
+                  />
+                  {(isDesktopOpen || isMobile) && item.name}
+                </NavLink>
+              );
+            }
+
+            // Grouped dropdown item (only for admins)
+            if (item.type === "group" && isAdmin) {
+              // Don't show grouped items when sidebar is collapsed
+              if (!isDesktopOpen && !isMobile) {
+                // In collapsed mode, show group items as individual flat links
+                return (
+                  <Fragment key={item.name}>
+                    {item.items?.map((subItem) => (
+                      <NavLink
+                        key={subItem.name}
+                        to={subItem.href}
+                        onClick={isMobile ? onClose : undefined}
+                        className={({ isActive }) =>
+                          clsx(
+                            "group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                            isActive
+                              ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+                          )
+                        }
+                        title={subItem.name}
+                      >
+                        <subItem.icon
+                          className="h-5 w-5 flex-shrink-0 mx-auto"
+                          aria-hidden="true"
+                        />
+                      </NavLink>
+                    ))}
+                  </Fragment>
+                );
               }
-            >
-              <item.icon
-                className={clsx(
-                  "h-5 w-5 flex-shrink-0",
-                  isDesktopOpen ? "mr-3" : "mx-auto"
-                )}
-                aria-hidden="true"
-              />
-              {isDesktopOpen && item.name}
-            </NavLink>
-          ))}
+
+              return (
+                <Disclosure key={item.name} as="div" defaultOpen>
+                  {({ open }) => (
+                    <>
+                      <Disclosure.Button
+                        className={clsx(
+                          "w-full group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                          "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+                        )}
+                      >
+                        <div className="flex items-center">
+                          <item.icon
+                            className="h-5 w-5 flex-shrink-0 mr-3"
+                            aria-hidden="true"
+                          />
+                          <span>{item.name}</span>
+                        </div>
+                        <ChevronDownIcon
+                          className={clsx(
+                            "h-4 w-4 transition-transform",
+                            open ? "transform rotate-180" : ""
+                          )}
+                        />
+                      </Disclosure.Button>
+                      <Disclosure.Panel className="mt-1 space-y-1">
+                        {item.items?.map((subItem) => (
+                          <NavLink
+                            key={subItem.name}
+                            to={subItem.href}
+                            onClick={isMobile ? onClose : undefined}
+                            className={({ isActive }) =>
+                              clsx(
+                                "group flex items-center pl-11 pr-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                                isActive
+                                  ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                                  : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+                              )
+                            }
+                          >
+                            <subItem.icon
+                              className="h-4 w-4 flex-shrink-0 mr-3"
+                              aria-hidden="true"
+                            />
+                            {subItem.name}
+                          </NavLink>
+                        ))}
+                      </Disclosure.Panel>
+                    </>
+                  )}
+                </Disclosure>
+              );
+            }
+
+            return null;
+          })}
         </nav>
       </div>
     </div>
