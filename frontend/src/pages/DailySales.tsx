@@ -210,8 +210,15 @@ export const DailySales = () => {
 
   const handleSave = () => {
     if (!existingDailySales) return;
+
+    // Remove calculated/display fields from inventories before sending to backend
+    // soldQuantity, productName, unit, categoryId are for display only
+    const cleanInventories = inventories.map(
+      ({ soldQuantity, productName, unit, categoryId, ...rest }) => rest
+    );
+
     saveMutation.mutate({
-      inventories,
+      inventories: cleanInventories,
       expenses,
       stockPurchases,
       notes,
