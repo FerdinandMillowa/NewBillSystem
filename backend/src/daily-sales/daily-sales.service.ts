@@ -653,6 +653,7 @@ export class DailySalesService {
             paymentMethod: purchaseItem.paymentMethod as any,
             supplier: purchaseItem.supplier,
             notes: purchaseItem.notes,
+            transactionDate: new Date(dailySales.date),
           }),
         );
       }
