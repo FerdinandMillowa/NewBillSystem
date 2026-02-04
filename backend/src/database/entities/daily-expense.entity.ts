@@ -46,6 +46,9 @@ export class DailyExpense {
   })
   paymentMethod: PaymentMethod;
 
+  @Column({ name: 'transaction_date', type: 'date' })
+  transactionDate: Date;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 

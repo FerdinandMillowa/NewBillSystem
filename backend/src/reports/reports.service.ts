@@ -521,14 +521,14 @@ export class ReportsService {
       finalStartDate = subDays(finalEndDate, 30);
     }
 
-    const expenses = await this.dailyExpenseRepository.find({
-      where: {
-        dailySales: {
-          date: Between(finalStartDate, finalEndDate),
-        },
-      },
-      relations: ['dailySales'],
-    });
+    // AFTER (with transaction_date column) - direct query
+    const expenses = await this.dailyExpenseRepository
+      .createQueryBuilder('de')
+      .where('de.transaction_date BETWEEN :start AND :end', { 
+        start: finalStartDate, 
+        end: finalEndDate 
+      })
+      .getMany();
 
     const categoryMap: Record<string, number> = {};
 
@@ -785,20 +785,26 @@ export class ReportsService {
     // Extract daily sales IDs for batched queries
     const dailySalesIds = dailySalesRecords.map((ds) => ds.id);
 
-    // ✅ FIX: Query stock purchases by daily_sales_id, not by created_at
+    // ✅ FIX: Query stock purchases by transaction_date (direct query - faster)
     const stockPurchases = await this.stockPurchaseRepository
       .createQueryBuilder('sp')
-      .where('sp.daily_sales_id IN (:...ids)', { ids: dailySalesIds })
+      .where('sp.transaction_date BETWEEN :start AND :end', { start, end })
       .getMany();
 
-    // Build map of stock purchases by daily_sales_id
+    // Build map of stock purchases by daily_sales_id for backward compatibility
     const stockByDailySalesId = new Map<string, number>();
+    const stockByDate = new Map<string, number>(); // For grouping by date
+    
     stockPurchases.forEach((sp) => {
-      const dailySalesId = sp.dailySalesId;
-      if (dailySalesId) {
-        const current = stockByDailySalesId.get(dailySalesId) || 0;
+      const dateKey = format(sp.transactionDate, 'yyyy-MM-dd');
+      const currentStock = stockByDate.get(dateKey) || 0;
+      stockByDate.set(dateKey, currentStock + (parseFloat((sp.totalCost || 0).toString()) || 0));
+      
+      // Also maintain backward compatibility with daily_sales_id mapping
+      if (sp.dailySalesId) {
+        const current = stockByDailySalesId.get(sp.dailySalesId) || 0;
         stockByDailySalesId.set(
-          dailySalesId,
+          sp.dailySalesId,
           current + (parseFloat((sp.totalCost || 0).toString()) || 0),
         );
       }
@@ -820,8 +826,8 @@ export class ReportsService {
       0,
     );
 
-    // Calculate total stock purchases from the map
-    const totalStockPurchases = Array.from(stockByDailySalesId.values()).reduce(
+    // Calculate total stock purchases from the stockByDate map (direct date query result)
+    const totalStockPurchases = Array.from(stockByDate.values()).reduce(
       (sum, val) => sum + val,
       0,
     );
@@ -831,7 +837,7 @@ export class ReportsService {
     // Build daily breakdown
     const dailyBreakdown = dailySalesRecords.map((ds) => {
       const dateStr = format(ds.date, 'yyyy-MM-dd');
-      const stockTotalForDay = stockByDailySalesId.get(ds.id) || 0;
+      const stockTotalForDay = stockByDate.get(dateStr) || 0;
 
       const dsTotalSales = parseFloat((ds.totalSales || 0).toString()) || 0;
       const dsTotalExpenses =

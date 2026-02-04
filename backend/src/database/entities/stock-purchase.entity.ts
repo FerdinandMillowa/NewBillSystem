@@ -15,7 +15,7 @@ export class StockPurchase {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'daily_sales_id', type: 'uuid' })
+  @Column({ name: 'daily_sales_id', type: 'uuid', nullable: true })
   dailySalesId: string;
 
   @Column({ name: 'product_id', type: 'uuid' })
@@ -28,7 +28,7 @@ export class StockPurchase {
   unitCost: number;
 
   @Column({ type: 'decimal', precision: 12, scale: 2, name: 'total_cost' })
-  totalCost: number; // quantity * unitCost
+  totalCost: number;
 
   @Column({
     type: 'enum',
@@ -43,11 +43,14 @@ export class StockPurchase {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+  @Column({ name: 'transaction_date', type: 'date' })
+  transactionDate: Date;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
   @ManyToOne(() => DailySales, (sales) => sales.stockPurchases, {
-    onDelete: 'CASCADE',
+    onDelete: 'SET NULL',
   })
   @JoinColumn({ name: 'daily_sales_id' })
   dailySales: DailySales;
