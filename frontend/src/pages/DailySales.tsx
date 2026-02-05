@@ -54,6 +54,13 @@ export const DailySales = () => {
     queryFn: () => productCategoriesService.getAll(),
   });
 
+  // Helper to get previous day's date
+  const getPreviousDate = (dateString: string) => {
+    const date = new Date(dateString);
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split("T")[0];
+  };
+
   // Fetch daily sales record for the selected date
   const {
     data: existingDailySales,
@@ -61,7 +68,39 @@ export const DailySales = () => {
     refetch: refetchSales,
   } = useQuery({
     queryKey: ["daily-sales-by-date", selectedDate],
-    queryFn: () => dailySalesService.getOrCreateDraft(selectedDate),
+    queryFn: async () => {
+      const today = new Date().toISOString().split("T")[0];
+
+      // Only auto-create for today's date
+      if (selectedDate === today) {
+        return dailySalesService.getOrCreateDraft(selectedDate);
+      }
+
+      // For historical dates, just fetch (don't create)
+      try {
+        return await dailySalesService.getByDate(selectedDate);
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          return null;
+        }
+        throw error;
+      }
+    },
+  });
+
+  // Fetch previous day's sales to initialize opening stock
+  const previousDate = getPreviousDate(selectedDate);
+  const { data: previousDaySales } = useQuery({
+    queryKey: ["daily-sales-previous", previousDate],
+    queryFn: async () => {
+      try {
+        return await dailySalesService.getByDate(previousDate);
+      } catch (error: any) {
+        if (error.response?.status === 404) return null;
+        throw error;
+      }
+    },
+    enabled: !existingDailySales, // Only fetch when no current record exists
   });
 
   // Fetch active products for initialization
@@ -208,6 +247,48 @@ export const DailySales = () => {
     },
   });
 
+  // Create a new draft when user wants to start entering data for non-today dates
+  const createDraftMutation = useMutation({
+    mutationFn: async () => {
+      let initialInventories: any[] = [];
+
+      // Priority 1: Use previous day's closing stock
+      if (previousDaySales?.inventories) {
+        initialInventories = previousDaySales.inventories.map((inv: any) => ({
+          productId: inv.productId,
+          openingStock: inv.closingStock, // ✅ Yesterday's closing = Today's opening
+          stockIn: 0,
+          closingStock: inv.closingStock, // Default (user will update)
+        }));
+      }
+      // Priority 2: Fallback to current product stock if no previous day
+      else if (productsData?.products) {
+        initialInventories = productsData.products
+          .filter((p) => p.isActive)
+          .map((p) => ({
+            productId: p.id,
+            openingStock: p.currentStock,
+            stockIn: 0,
+            closingStock: p.currentStock,
+          }));
+      }
+
+      return dailySalesService.create({
+        date: selectedDate,
+        inventories: initialInventories, // ✅ PRE-POPULATED!
+        expenses: [],
+        stockPurchases: [],
+      });
+    },
+    onSuccess: () => {
+      refetchSales();
+      toast.success("Record created with previous day's closing stock");
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to create record");
+    },
+  });
+
   const handleSave = () => {
     if (!existingDailySales) return;
 
@@ -298,7 +379,33 @@ export const DailySales = () => {
         </div>
       </div>
 
-      {/* Bills Section */}
+      {/* Show "Create Record" button when no record exists for non-today dates */}
+      {!existingDailySales && !isSalesLoading && (
+        <Card className="mb-6">
+          <div className="text-center py-8">
+            <CalendarIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No record for {format(new Date(selectedDate), "MMMM d, yyyy")}
+            </h3>
+            <p className="text-gray-500 mb-4">
+              {previousDaySales
+                ? `Opening stock will be initialized from ${format(
+                    new Date(previousDate),
+                    "MMM d, yyyy"
+                  )}'s closing stock`
+                : "Opening stock will be initialized from current inventory"}
+            </p>
+            <Button
+              onClick={() => createDraftMutation.mutate()}
+              isLoading={createDraftMutation.isPending}
+            >
+              Create Record for This Date
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Bills Section - only show if record exists */}
       {existingDailySales && (
         <DailySalesBillsSection
           selectedDate={selectedDate}
@@ -309,186 +416,193 @@ export const DailySales = () => {
         />
       )}
 
-      {/* Summary */}
-      <DailySalesSummary
-        totals={{
-          totalSales: calculateTotalSales(),
-          totalCollected: calculateTotalCollected(),
-          totalExpenses: calculateTotalExpenses(),
-          shortage: existingDailySales?.shortage || 0,
-          netRevenue: calculateTotalSales() - calculateTotalExpenses(),
-          cashAtHand: calculateCashAtHand(),
-          inventories: inventories,
-        }}
-        billsAmount={billsAmount}
-      />
+      {/* Summary - only show if record exists */}
+      {existingDailySales && (
+        <DailySalesSummary
+          totals={{
+            totalSales: calculateTotalSales(),
+            totalCollected: calculateTotalCollected(),
+            totalExpenses: calculateTotalExpenses(),
+            shortage: existingDailySales?.shortage || 0,
+            netRevenue: calculateTotalSales() - calculateTotalExpenses(),
+            cashAtHand: calculateCashAtHand(),
+            inventories: inventories,
+          }}
+          billsAmount={billsAmount}
+        />
+      )}
 
-      {/* Inventory Tracking */}
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center">
-            <DocumentCheckIcon className="w-5 h-5 mr-2 text-primary-600" />
-            Inventory Tracking
-          </h2>
-          <div className="flex space-x-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleConvertClick}
-              disabled={isFinalized || bottleProducts.length === 0}
-              className="flex items-center"
-            >
-              <ArrowPathIcon className="w-4 h-4 mr-1.5" />
-              Convert Bottle
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => refetchSales()}
-            >
-              <ArrowPathIcon className="w-4 h-4 mr-1.5" />
-              Refresh
-            </Button>
-          </div>
-        </div>
+      {/* Show main form only if record exists */}
+      {existingDailySales ? (
+        <>
+          {/* Inventory Tracking */}
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center">
+                <DocumentCheckIcon className="w-5 h-5 mr-2 text-primary-600" />
+                Inventory Tracking
+              </h2>
+              <div className="flex space-x-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleConvertClick}
+                  disabled={isFinalized || bottleProducts.length === 0}
+                  className="flex items-center"
+                >
+                  <ArrowPathIcon className="w-4 h-4 mr-1.5" />
+                  Convert Bottle
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => refetchSales()}
+                >
+                  <ArrowPathIcon className="w-4 h-4 mr-1.5" />
+                  Refresh
+                </Button>
+              </div>
+            </div>
 
-        {productsData?.products && productsData.products.length > 0 ? (
-          <DailySalesInventoryGrid
-            products={productsData.products}
-            categories={categories || []}
-            inventories={inventories}
-            onInventoriesChange={setInventories}
+            {productsData?.products && productsData.products.length > 0 ? (
+              <DailySalesInventoryGrid
+                products={productsData.products}
+                categories={categories || []}
+                inventories={inventories}
+                onInventoriesChange={setInventories}
+                isDisabled={isFinalized}
+              />
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500">Loading products...</p>
+              </div>
+            )}
+          </Card>
+
+          {/* Income Avenue (Revenue Collection) */}
+          <DailySalesRevenueForm
+            revenue={revenueData}
+            cashAtHand={calculateCashAtHand()}
+            onRevenueChange={setRevenueData}
             isDisabled={isFinalized}
           />
-        ) : (
-          <div className="text-center py-8">
-            <p className="text-gray-500">Loading products...</p>
-          </div>
-        )}
-      </Card>
 
-      {/* Income Avenue (Revenue Collection) */}
-      <DailySalesRevenueForm
-        revenue={revenueData}
-        cashAtHand={calculateCashAtHand()}
-        onRevenueChange={setRevenueData}
-        isDisabled={isFinalized}
-      />
+          {/* Expenses */}
+          <DailySalesExpensesForm
+            expenses={expenses}
+            onExpensesChange={setExpenses}
+            isDisabled={isFinalized}
+          />
 
-      {/* Expenses */}
-      <DailySalesExpensesForm
-        expenses={expenses}
-        onExpensesChange={setExpenses}
-        isDisabled={isFinalized}
-      />
+          {/* Stock Purchases */}
+          <DailySalesStockPurchases
+            stockPurchases={stockPurchases}
+            products={productsData?.products || []}
+            onStockPurchasesChange={setStockPurchases}
+            isDisabled={isFinalized}
+          />
 
-      {/* Stock Purchases */}
-      <DailySalesStockPurchases
-        stockPurchases={stockPurchases}
-        products={productsData?.products || []}
-        onStockPurchasesChange={setStockPurchases}
-        isDisabled={isFinalized}
-      />
+          {/* Notes */}
+          <Card>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Notes</h3>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Any special notes for today..."
+              className="input min-h-[100px]"
+              disabled={isFinalized}
+            />
+          </Card>
 
-      {/* Notes */}
-      <Card>
-        <h3 className="text-sm font-medium text-gray-700 mb-2">Notes</h3>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Any special notes for today..."
-          className="input min-h-[100px]"
-          disabled={isFinalized}
-        />
-      </Card>
-
-      {/* Action Bar */}
-      {!isFinalized && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 flex justify-end space-x-4 z-10 lg:left-64">
-          <Button
-            variant="secondary"
-            onClick={handleSave}
-            isLoading={saveMutation.isPending}
-            disabled={finalizeMutation.isPending}
-          >
-            <PencilIcon className="w-5 h-5 mr-2" />
-            Save Draft
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleFinalize}
-            isLoading={finalizeMutation.isPending}
-            disabled={saveMutation.isPending}
-          >
-            <CheckCircleIcon className="w-5 h-5 mr-2" />
-            Finalize Daily Sales
-          </Button>
-        </div>
-      )}
-
-      {isFinalized && (
-        <Card className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-          <div className="flex items-center">
-            <CheckCircleIcon className="w-6 h-6 text-green-600 dark:text-green-400 mr-3" />
-            <div className="flex-1">
-              <h3 className="text-sm font-medium text-green-800 dark:text-green-200">
-                Daily Sales Finalized
-              </h3>
-              <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                This daily sales record has been finalized and locked.
-                {isAdmin &&
-                  " As an admin, you can unlock it using the button above."}
-                {!isAdmin &&
-                  " Contact an administrator if you need to make changes."}
-              </p>
+          {/* Action Bar */}
+          {!isFinalized && (
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 flex justify-end space-x-4 z-10 lg:left-64">
+              <Button
+                variant="secondary"
+                onClick={handleSave}
+                isLoading={saveMutation.isPending}
+                disabled={finalizeMutation.isPending}
+              >
+                <PencilIcon className="w-5 h-5 mr-2" />
+                Save Draft
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleFinalize}
+                isLoading={finalizeMutation.isPending}
+                disabled={saveMutation.isPending}
+              >
+                <CheckCircleIcon className="w-5 h-5 mr-2" />
+                Finalize Daily Sales
+              </Button>
             </div>
-          </div>
-        </Card>
-      )}
-
-      {isFinalized && isAdmin && existingDailySales && (
-        <ActualCashInput
-          dailySalesId={existingDailySales.id}
-          currentCashAtHand={existingDailySales.cashAtHand || 0}
-          currentActualCash={existingDailySales.actualCashCollected}
-        />
-      )}
-
-      {/* Modals */}
-      {showBottleSelection && (
-        <BottleSelectionModal
-          isOpen={true}
-          onClose={() => setShowBottleSelection(false)}
-          bottleProducts={bottleProducts}
-          onSelect={handleBottleSelect}
-        />
-      )}
-
-      {selectedBottle && (
-        <BottleConversionModal
-          isOpen={true}
-          onClose={() => setSelectedBottle(null)}
-          bottleProduct={selectedBottle}
-          shotProduct={productsData?.products.find(
-            (p) => p.id === selectedBottle.linkedShotProductId
           )}
-          onSubmit={(data) => {
-            if (!selectedBottle.linkedShotProductId) {
-              toast.error("No linked shot product found");
-              return;
-            }
 
-            transferMutation.mutate({
-              fromProductId: selectedBottle.id,
-              toProductId: selectedBottle.linkedShotProductId,
-              quantity: data.quantity,
-              notes: data.notes,
-            });
-            setSelectedBottle(null);
-          }}
-          isLoading={transferMutation.isPending}
-        />
-      )}
+          {isFinalized && (
+            <Card className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+              <div className="flex items-center">
+                <CheckCircleIcon className="w-6 h-6 text-green-600 dark:text-green-400 mr-3" />
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-green-800 dark:text-green-200">
+                    Daily Sales Finalized
+                  </h3>
+                  <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                    This daily sales record has been finalized and locked.
+                    {isAdmin &&
+                      " As an admin, you can unlock it using the button above."}
+                    {!isAdmin &&
+                      " Contact an administrator if you need to make changes."}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {isFinalized && isAdmin && existingDailySales && (
+            <ActualCashInput
+              dailySalesId={existingDailySales.id}
+              currentCashAtHand={existingDailySales.cashAtHand || 0}
+              currentActualCash={existingDailySales.actualCashCollected}
+            />
+          )}
+
+          {/* Modals */}
+          {showBottleSelection && (
+            <BottleSelectionModal
+              isOpen={true}
+              onClose={() => setShowBottleSelection(false)}
+              bottleProducts={bottleProducts}
+              onSelect={handleBottleSelect}
+            />
+          )}
+
+          {selectedBottle && (
+            <BottleConversionModal
+              isOpen={true}
+              onClose={() => setSelectedBottle(null)}
+              bottleProduct={selectedBottle}
+              shotProduct={productsData?.products.find(
+                (p) => p.id === selectedBottle.linkedShotProductId
+              )}
+              onSubmit={(data) => {
+                if (!selectedBottle.linkedShotProductId) {
+                  toast.error("No linked shot product found");
+                  return;
+                }
+
+                transferMutation.mutate({
+                  fromProductId: selectedBottle.id,
+                  toProductId: selectedBottle.linkedShotProductId,
+                  quantity: data.quantity,
+                  notes: data.notes,
+                });
+                setSelectedBottle(null);
+              }}
+              isLoading={transferMutation.isPending}
+            />
+          )}
+        </>
+      ) : null}
     </div>
   );
 };
