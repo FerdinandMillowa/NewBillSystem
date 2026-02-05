@@ -63,6 +63,12 @@ export class DailySalesController {
     return this.dailySalesService.getOrCreateDraftForDate(date);
   }
 
+  // Get nearest finalized record before a date
+  @Get('nearest-before/:date')
+  async getNearestBefore(@Param('date') date: string) {
+    return this.dailySalesService.findNearestBefore(date);
+  }
+
   // Get bills for a specific date
   @Get('bills')
   getBillsForDate(

@@ -43,6 +43,12 @@ export const dailySalesService = {
     return response.data;
   },
 
+  // ✅ NEW: Get nearest finalized record before a date
+  getNearestBefore: async (date: string) => {
+    const response = await api.get(`/daily-sales/nearest-before/${date}`);
+    return response.data;
+  },
+
   // UPDATED: Get bills for a specific date with optional dailySalesId
   getBillsForDate: async (date: string, dailySalesId?: string) => {
     const params: any = { date };

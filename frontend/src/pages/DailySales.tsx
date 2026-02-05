@@ -54,13 +54,6 @@ export const DailySales = () => {
     queryFn: () => productCategoriesService.getAll(),
   });
 
-  // Helper to get previous day's date
-  const getPreviousDate = (dateString: string) => {
-    const date = new Date(dateString);
-    date.setDate(date.getDate() - 1);
-    return date.toISOString().split("T")[0];
-  };
-
   // Fetch daily sales record for the selected date
   const {
     data: existingDailySales,
@@ -88,13 +81,12 @@ export const DailySales = () => {
     },
   });
 
-  // Fetch previous day's sales to initialize opening stock
-  const previousDate = getPreviousDate(selectedDate);
-  const { data: previousDaySales } = useQuery({
-    queryKey: ["daily-sales-previous", previousDate],
+  // Get nearest finalized record before selected date
+  const { data: nearestPreviousRecord } = useQuery({
+    queryKey: ["daily-sales-nearest-before", selectedDate],
     queryFn: async () => {
       try {
-        return await dailySalesService.getByDate(previousDate);
+        return await dailySalesService.getNearestBefore(selectedDate);
       } catch (error: any) {
         if (error.response?.status === 404) return null;
         throw error;
@@ -102,6 +94,15 @@ export const DailySales = () => {
     },
     enabled: !existingDailySales, // Only fetch when no current record exists
   });
+
+  // For display: Calculate how many days ago the nearest record was
+  const daysSinceLastRecord = nearestPreviousRecord
+    ? Math.floor(
+        (new Date(selectedDate).getTime() -
+          new Date(nearestPreviousRecord.date).getTime()) /
+          (1000 * 60 * 60 * 24)
+      )
+    : null;
 
   // Fetch active products for initialization
   const { data: productsData } = useQuery({
@@ -252,16 +253,18 @@ export const DailySales = () => {
     mutationFn: async () => {
       let initialInventories: any[] = [];
 
-      // Priority 1: Use previous day's closing stock
-      if (previousDaySales?.inventories) {
-        initialInventories = previousDaySales.inventories.map((inv: any) => ({
-          productId: inv.productId,
-          openingStock: inv.closingStock, // ✅ Yesterday's closing = Today's opening
-          stockIn: 0,
-          closingStock: inv.closingStock, // Default (user will update)
-        }));
+      // Use nearest finalized record before this date
+      if (nearestPreviousRecord?.inventories) {
+        initialInventories = nearestPreviousRecord.inventories.map(
+          (inv: any) => ({
+            productId: inv.productId,
+            openingStock: inv.closingStock, // Use closing stock from nearest previous
+            stockIn: 0,
+            closingStock: inv.closingStock,
+          })
+        );
       }
-      // Priority 2: Fallback to current product stock if no previous day
+      // Fallback: If no previous records exist at all, use current product stock
       else if (productsData?.products) {
         initialInventories = productsData.products
           .filter((p) => p.isActive)
@@ -275,14 +278,21 @@ export const DailySales = () => {
 
       return dailySalesService.create({
         date: selectedDate,
-        inventories: initialInventories, // ✅ PRE-POPULATED!
+        inventories: initialInventories,
         expenses: [],
         stockPurchases: [],
       });
     },
     onSuccess: () => {
       refetchSales();
-      toast.success("Record created with previous day's closing stock");
+      toast.success(
+        nearestPreviousRecord
+          ? `Record created using ${format(
+              new Date(nearestPreviousRecord.date),
+              "MMM d"
+            )} data`
+          : "Record created with current inventory"
+      );
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Failed to create record");
@@ -388,12 +398,25 @@ export const DailySales = () => {
               No record for {format(new Date(selectedDate), "MMMM d, yyyy")}
             </h3>
             <p className="text-gray-500 mb-4">
-              {previousDaySales
-                ? `Opening stock will be initialized from ${format(
-                    new Date(previousDate),
-                    "MMM d, yyyy"
-                  )}'s closing stock`
-                : "Opening stock will be initialized from current inventory"}
+              {nearestPreviousRecord ? (
+                <>
+                  Will initialize from{" "}
+                  <span className="font-medium text-gray-700">
+                    {format(
+                      new Date(nearestPreviousRecord.date),
+                      "MMM d, yyyy"
+                    )}
+                  </span>
+                  {daysSinceLastRecord > 1 && (
+                    <span className="text-yellow-600">
+                      {" "}
+                      ({daysSinceLastRecord} days ago)
+                    </span>
+                  )}
+                </>
+              ) : (
+                "No previous records found. Will use current inventory levels."
+              )}
             </p>
             <Button
               onClick={() => createDraftMutation.mutate()}
@@ -401,6 +424,14 @@ export const DailySales = () => {
             >
               Create Record for This Date
             </Button>
+
+            {/* Warning if there's a large gap */}
+            {daysSinceLastRecord && daysSinceLastRecord > 7 && (
+              <div className="mt-4 text-sm text-yellow-600">
+                ⚠️ Large gap detected. Consider entering intermediate dates
+                first for accuracy.
+              </div>
+            )}
           </div>
         </Card>
       )}

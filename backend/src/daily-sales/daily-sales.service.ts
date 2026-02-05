@@ -5,7 +5,13 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThanOrEqual, IsNull } from 'typeorm';
+import {
+  Repository,
+  Between,
+  MoreThanOrEqual,
+  IsNull,
+  LessThan,
+} from 'typeorm';
 import { DailySales } from '../database/entities/daily-sales.entity';
 import { DailyInventory } from '../database/entities/daily-inventory.entity';
 import { DailyExpense } from '../database/entities/daily-expense.entity';
@@ -36,6 +42,21 @@ export class DailySalesService {
     @InjectRepository(Bill)
     private billRepository: Repository<Bill>,
   ) {}
+
+  async findNearestBefore(targetDate: string): Promise<DailySales | null> {
+    const dailySales = await this.dailySalesRepository.findOne({
+      where: {
+        date: LessThan(new Date(targetDate)),
+        status: 'finalized', // Only use finalized records
+      },
+      order: {
+        date: 'DESC', // Most recent first
+      },
+      relations: ['inventories', 'inventories.product'],
+    });
+
+    return dailySales;
+  }
 
   async getOrCreateDraftForDate(date: string): Promise<DailySales> {
     const targetDate = new Date(date);
