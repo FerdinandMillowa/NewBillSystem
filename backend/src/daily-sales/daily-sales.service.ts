@@ -81,6 +81,9 @@ export class DailySalesService {
       where: { isActive: true },
     });
 
+    // ✅ Find previous finalized record
+    const previousRecord = await this.findNearestBefore(date);
+
     const dailySalesEntity = this.dailySalesRepository.create({
       date: targetDate,
       status: 'draft',
@@ -101,19 +104,46 @@ export class DailySalesService {
     dailySales = await this.dailySalesRepository.save(dailySalesEntity);
 
     const inventoryRecords: DailyInventory[] = [];
-    for (const product of products) {
-      inventoryRecords.push(
-        this.dailyInventoryRepository.create({
-          dailySalesId: dailySales.id,
-          productId: product.id,
-          openingStock: product.currentStock,
-          stockIn: 0,
-          closingStock: product.currentStock,
-          soldQuantity: 0,
-          productPrice: product.currentPrice,
-          revenue: 0,
-        }),
-      );
+
+    // ✅ Copy closing stock as opening stock from previous day
+    if (previousRecord && previousRecord.inventories) {
+      for (const prevInv of previousRecord.inventories) {
+        const product = products.find((p) => p.id === prevInv.productId);
+        if (product) {
+          inventoryRecords.push(
+            this.dailyInventoryRepository.create({
+              dailySalesId: dailySales.id,
+              productId: prevInv.productId,
+              openingStock: prevInv.closingStock, // ✅ This is the key
+              stockIn: 0,
+              closingStock: prevInv.closingStock,
+              soldQuantity: 0,
+              productPrice: product.currentPrice,
+              revenue: 0,
+              convertedOut: 0,
+              convertedIn: 0,
+            }),
+          );
+        }
+      }
+    } else {
+      // Fallback: Create from current product stock
+      for (const product of products) {
+        inventoryRecords.push(
+          this.dailyInventoryRepository.create({
+            dailySalesId: dailySales.id,
+            productId: product.id,
+            openingStock: product.currentStock,
+            stockIn: 0,
+            closingStock: product.currentStock,
+            soldQuantity: 0,
+            productPrice: product.currentPrice,
+            revenue: 0,
+            convertedOut: 0,
+            convertedIn: 0,
+          }),
+        );
+      }
     }
 
     if (inventoryRecords.length > 0) {
@@ -171,33 +201,24 @@ export class DailySalesService {
       }
     }
 
-    for (const invItem of inventories) {
-      const stockIn = invItem.stockIn || 0;
+    // ✅ AUTO-POPULATE stockIn from purchases
+    const updatedInventories = [...inventories];
+    for (let i = 0; i < updatedInventories.length; i++) {
+      const invItem = updatedInventories[i];
       const purchased = purchasedProducts.get(invItem.productId) || 0;
 
-      if (stockIn > 0 && purchased === 0) {
-        const product = await this.productRepository.findOne({
-          where: { id: invItem.productId },
-        });
-        throw new BadRequestException(
-          `Stock In entered for "${product?.name}" but no Stock Purchase recorded.`,
-        );
-      }
-
-      if (stockIn > 0 && purchased > 0 && stockIn !== purchased) {
-        const product = await this.productRepository.findOne({
-          where: { id: invItem.productId },
-        });
-        throw new BadRequestException(
-          `Stock In (${stockIn}) does not match Stock Purchase (${purchased}) for "${product?.name}".`,
-        );
+      if (purchased > 0) {
+        updatedInventories[i] = {
+          ...invItem,
+          stockIn: purchased,
+        };
       }
     }
 
     let totalSalesFromInventory = 0;
     const inventoryRecords: DailyInventory[] = [];
 
-    for (const invItem of inventories) {
+    for (const invItem of updatedInventories) {
       const product = await this.productRepository.findOne({
         where: { id: invItem.productId },
       });
@@ -228,6 +249,8 @@ export class DailySalesService {
           soldQuantity,
           productPrice: product.currentPrice,
           revenue,
+          convertedOut: 0,
+          convertedIn: 0,
         }),
       );
 
@@ -581,11 +604,48 @@ export class DailySalesService {
       await this.stockPurchaseRepository.remove(dailySales.stockPurchases);
     }
 
+    // Build purchased products map
+    const purchasedProducts = new Map<string, number>();
+    if (stockPurchases && stockPurchases.length > 0) {
+      for (const purchaseItem of stockPurchases) {
+        const product = await this.productRepository.findOne({
+          where: { id: purchaseItem.productId },
+        });
+
+        if (!product) {
+          throw new NotFoundException(
+            `Product ${purchaseItem.productId} not found`,
+          );
+        }
+
+        const existingPurchased =
+          purchasedProducts.get(purchaseItem.productId) || 0;
+        purchasedProducts.set(
+          purchaseItem.productId,
+          existingPurchased + purchaseItem.quantity,
+        );
+      }
+    }
+
+    // ✅ AUTO-POPULATE stockIn from purchases (in update method)
+    const updatedInventories = [...(inventories || [])];
+    for (let i = 0; i < updatedInventories.length; i++) {
+      const invItem = updatedInventories[i];
+      const purchased = purchasedProducts.get(invItem.productId) || 0;
+
+      if (purchased > 0) {
+        updatedInventories[i] = {
+          ...invItem,
+          stockIn: purchased,
+        };
+      }
+    }
+
     let totalSalesFromInventory = 0;
     const inventoryRecords: DailyInventory[] = [];
 
-    if (inventories && inventories.length > 0) {
-      for (const invItem of inventories) {
+    if (updatedInventories && updatedInventories.length > 0) {
+      for (const invItem of updatedInventories) {
         const product = await this.productRepository.findOne({
           where: { id: invItem.productId },
         });
@@ -617,6 +677,8 @@ export class DailySalesService {
             soldQuantity,
             productPrice: product.currentPrice,
             revenue,
+            convertedOut: 0,
+            convertedIn: 0,
           }),
         );
 
@@ -772,17 +834,16 @@ export class DailySalesService {
     return this.dailySalesRepository.save(dailySales);
   }
 
-  /**
-   * Updated method to handle bottle-to-shot conversion with critical validations
-   * and daily inventory synchronization.
-   */
   async createInventoryTransfer(
     dailySalesId: string,
     createTransferDto: CreateInventoryTransferDto,
     userId: string,
-  ): Promise<InventoryTransfer> {
+  ): Promise<DailySales> {
+    const { fromProductId, toProductId, quantity, notes } = createTransferDto;
+
     const dailySales = await this.dailySalesRepository.findOne({
       where: { id: dailySalesId },
+      relations: ['inventories', 'inventories.product'],
     });
 
     if (!dailySales) {
@@ -791,132 +852,211 @@ export class DailySalesService {
 
     if (dailySales.status === 'finalized') {
       throw new BadRequestException(
-        'Cannot add transfer to finalized daily sales',
+        'Cannot convert bottles on finalized daily sales',
       );
     }
 
-    const { fromProductId, toProductId, quantity, notes } = createTransferDto;
-
-    // ✅ CRITICAL FIX: Get products to check linking and units
-    const fromProduct = await this.productRepository.findOne({
+    const bottle = await this.productRepository.findOne({
       where: { id: fromProductId },
     });
 
-    const toProduct = await this.productRepository.findOne({
+    if (!bottle) {
+      throw new NotFoundException('Bottle product not found');
+    }
+
+    if (bottle.unit !== 'bottle') {
+      throw new BadRequestException('Source product must be a bottle');
+    }
+
+    if (
+      !bottle.linkedShotProductId ||
+      bottle.linkedShotProductId !== toProductId
+    ) {
+      throw new BadRequestException(
+        'Invalid conversion: Shot product not properly linked',
+      );
+    }
+
+    if (bottle.currentStock < quantity) {
+      throw new BadRequestException(
+        `Insufficient bottle stock. Available: ${bottle.currentStock}, Required: ${quantity}`,
+      );
+    }
+
+    const shotsPerBottle = bottle.shotsPerBottle || 0;
+    if (shotsPerBottle <= 0) {
+      throw new BadRequestException(
+        'Shots per bottle must be configured for this product',
+      );
+    }
+
+    const shotProduct = await this.productRepository.findOne({
       where: { id: toProductId },
     });
 
-    if (!fromProduct || !toProduct) {
-      throw new NotFoundException('One or both products not found');
+    if (!shotProduct) {
+      throw new NotFoundException('Shot product not found');
     }
 
-    // ✅ CRITICAL VALIDATION: Ensure fromProduct is a bottle
-    if (fromProduct.unit !== 'bottle') {
-      throw new BadRequestException(
-        `Product ${fromProduct.name} is not a bottle. Only bottles can be converted to shots.`,
-      );
+    if (shotProduct.unit !== 'shot') {
+      throw new BadRequestException('Target product must be a shot');
     }
 
-    // ✅ CRITICAL VALIDATION: Ensure toProduct is a shot
-    if (toProduct.unit !== 'shot') {
-      throw new BadRequestException(
-        `Product ${toProduct.name} is not a shot product.`,
-      );
+    const shotsGenerated = quantity * shotsPerBottle;
+
+    // Update MASTER inventory
+    bottle.currentStock -= quantity;
+    shotProduct.currentStock += shotsGenerated;
+    await this.productRepository.save([bottle, shotProduct]);
+
+    // Update DAILY inventory records
+    let bottleInventory = dailySales.inventories.find(
+      (inv) => inv.productId === fromProductId,
+    );
+
+    if (!bottleInventory) {
+      bottleInventory = this.dailyInventoryRepository.create({
+        dailySalesId,
+        productId: fromProductId,
+        openingStock: bottle.currentStock + quantity,
+        stockIn: 0,
+        closingStock: bottle.currentStock,
+        soldQuantity: 0,
+        convertedOut: quantity, // ✅ Set conversion out
+        convertedIn: 0,
+        productPrice: bottle.currentPrice,
+        revenue: 0,
+      });
+    } else {
+      bottleInventory.closingStock -= quantity;
+      bottleInventory.convertedOut =
+        (bottleInventory.convertedOut || 0) + quantity; // ✅ Track conversion
+
+      // ✅ Recalculate sold quantity EXCLUDING conversions
+      const totalAvailable =
+        bottleInventory.openingStock + bottleInventory.stockIn;
+      const actualSold =
+        totalAvailable -
+        bottleInventory.closingStock -
+        bottleInventory.convertedOut;
+      bottleInventory.soldQuantity = Math.max(0, actualSold);
     }
 
-    // ✅ CRITICAL VALIDATION: Check if products are properly linked
-    if (fromProduct.linkedShotProductId !== toProduct.id) {
-      throw new BadRequestException(
-        `Product ${fromProduct.name} is not linked to ${toProduct.name}. ` +
-          `Please ensure bottle products are properly linked to their shot versions in product setup.`,
-      );
+    let shotInventory = dailySales.inventories.find(
+      (inv) => inv.productId === toProductId,
+    );
+
+    if (!shotInventory) {
+      shotInventory = this.dailyInventoryRepository.create({
+        dailySalesId,
+        productId: toProductId,
+        openingStock: Math.max(0, shotProduct.currentStock - shotsGenerated),
+        stockIn: shotsGenerated, // ✅ Shots come from bottle conversion
+        closingStock: shotProduct.currentStock,
+        soldQuantity: 0,
+        convertedOut: 0,
+        convertedIn: shotsGenerated, // ✅ Set conversion in
+        productPrice: shotProduct.currentPrice,
+        revenue: 0,
+      });
+    } else {
+      shotInventory.stockIn += shotsGenerated;
+      shotInventory.convertedIn =
+        (shotInventory.convertedIn || 0) + shotsGenerated; // ✅ Track conversion
+      shotInventory.closingStock += shotsGenerated;
+
+      // Recalculate sold quantity (convertedIn is already in stockIn)
+      shotInventory.soldQuantity =
+        shotInventory.openingStock +
+        shotInventory.stockIn -
+        shotInventory.closingStock;
     }
 
-    if (!fromProduct.shotsPerBottle) {
-      throw new BadRequestException(
-        `Product ${fromProduct.name} does not have shots per bottle configured`,
-      );
-    }
-
-    if (fromProduct.currentStock < quantity) {
-      throw new BadRequestException(
-        `Insufficient stock. Available: ${fromProduct.currentStock} bottles`,
-      );
-    }
-
-    const conversionRate = fromProduct.shotsPerBottle;
-    const resultingQuantity = quantity * conversionRate;
-
-    // Capture previous physical stocks before mutation so we can update daily inventories
-    const prevFromProductStock = fromProduct.currentStock;
-    const prevToProductStock = toProduct.currentStock;
+    await this.dailyInventoryRepository.save([bottleInventory, shotInventory]);
 
     const transfer = this.inventoryTransferRepository.create({
       dailySalesId,
       fromProductId,
       toProductId,
       quantity,
-      conversionRate,
-      resultingQuantity,
+      conversionRate: shotsPerBottle,
+      resultingQuantity: shotsGenerated,
       userId,
       notes,
     });
 
-    const savedTransfer = await this.inventoryTransferRepository.save(transfer);
+    await this.inventoryTransferRepository.save(transfer);
 
-    // ✅ Update both products' current physical stock
-    fromProduct.currentStock -= quantity;
-    toProduct.currentStock += resultingQuantity;
+    await this.recalculateTotals(dailySalesId);
 
-    await this.productRepository.save([fromProduct, toProduct]);
+    return this.findOne(dailySalesId);
+  }
 
-    // ✅ Update daily sales inventory records if they exist
-    const fromInventory = await this.dailyInventoryRepository.findOne({
-      where: {
-        dailySalesId,
-        productId: fromProductId,
-      },
+  private async recalculateTotals(dailySalesId: string): Promise<void> {
+    const dailySales = await this.dailySalesRepository.findOne({
+      where: { id: dailySalesId },
+      relations: ['inventories', 'inventories.product', 'expenses', 'bills'],
     });
 
-    const toInventory = await this.dailyInventoryRepository.findOne({
-      where: {
-        dailySalesId,
-        productId: toProductId,
-      },
-    });
+    if (!dailySales) return;
 
-    if (fromInventory) {
-      /**
-       * IMPORTANT:
-       * Do NOT make the conversion look like a sale.
-       * The soldQuantity is computed as (opening + stockIn - closing).
-       * If we set closingStock to the new product.currentStock (after decrement),
-       * the conversion will be treated as sold.
-       *
-       * To avoid that, keep the daily inventory's closingStock at the previous
-       * closing stock value (i.e., prevFromProductStock). The physical product
-       * stock in the products table reflects the actual inventory, while the
-       * daily inventory record preserves the sold calculation for the day.
-       */
-      fromInventory.closingStock = prevFromProductStock;
-      await this.dailyInventoryRepository.save(fromInventory);
+    let totalSales = 0;
+
+    for (const inventory of dailySales.inventories) {
+      // ✅ FIX: Calculate actual sold quantity EXCLUDING bottles converted out
+      const soldQuantity =
+        inventory.openingStock +
+        inventory.stockIn -
+        inventory.closingStock -
+        (inventory.convertedOut || 0);
+
+      const actualSold = Math.max(0, soldQuantity);
+      const revenue = actualSold * inventory.productPrice;
+      totalSales += revenue;
+
+      inventory.soldQuantity = actualSold;
+      inventory.revenue = revenue;
+      await this.dailyInventoryRepository.save(inventory);
     }
 
-    if (toInventory) {
-      /**
-       * For the shot product we want to reflect that new shots were added to
-       * the day's available inventory. Increase openingStock by resultingQuantity
-       * and set closingStock equal to the new openingStock (since these shots
-       * haven't been sold yet). This makes future sold calculations correct.
-       */
-      const previousOpening = toInventory.openingStock || prevToProductStock;
-      const newOpening = previousOpening + resultingQuantity;
-      toInventory.openingStock = newOpening;
-      toInventory.closingStock = newOpening;
-      await this.dailyInventoryRepository.save(toInventory);
-    }
+    const billsAmount = (dailySales.bills || []).reduce(
+      (sum, bill) => sum + parseFloat(bill.amount?.toString() || '0'),
+      0,
+    );
 
-    return savedTransfer;
+    const totalExpenses = (dailySales.expenses || []).reduce(
+      (sum, expense) => sum + parseFloat(expense.amount?.toString() || '0'),
+      0,
+    );
+
+    const cashExpenses = (dailySales.expenses || [])
+      .filter((exp) => exp.paymentMethod === 'cash')
+      .reduce(
+        (sum, expense) => sum + parseFloat(expense.amount?.toString() || '0'),
+        0,
+      );
+
+    const nonCashCollected =
+      (dailySales.airtelMoney || 0) +
+      (dailySales.mpamba || 0) +
+      (dailySales.bank || 0);
+
+    const cashAtHand =
+      totalSales - totalExpenses - nonCashCollected - billsAmount;
+
+    const totalCollected = cashAtHand + nonCashCollected;
+    const netRevenue = totalSales - totalExpenses;
+
+    dailySales.totalSales = totalSales;
+    dailySales.billsAmount = billsAmount;
+    dailySales.totalExpenses = totalExpenses;
+    dailySales.cashExpenses = cashExpenses;
+    dailySales.cashAtHand = cashAtHand;
+    dailySales.cash = cashAtHand;
+    dailySales.totalCollected = totalCollected;
+    dailySales.netRevenue = netRevenue;
+
+    await this.dailySalesRepository.save(dailySales);
   }
 
   async remove(id: string): Promise<{ message: string }> {
@@ -1010,30 +1150,19 @@ export class DailySalesService {
     };
   }
 
+  // ✅ FIX: Use DATE() query as requested for precise separation
   async getBillsForDate(date: string, dailySalesId?: string): Promise<Bill[]> {
-    const targetDate = new Date(date);
-    const startOfDay = new Date(targetDate);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(targetDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    const query = this.billRepository
+      .createQueryBuilder('bill')
+      .leftJoinAndSelect('bill.customer', 'customer')
+      .where('DATE(bill.createdAt) = :date', { date });
 
     if (dailySalesId) {
-      return this.billRepository.find({
-        where: {
-          dailySalesId,
-        },
-        relations: ['customer'],
-        order: { createdAt: 'DESC' },
-      });
+      query.andWhere('bill.dailySalesId = :dailySalesId', { dailySalesId });
+    } else {
+      query.andWhere('bill.dailySalesId IS NULL');
     }
 
-    return this.billRepository.find({
-      where: {
-        createdAt: Between(startOfDay, endOfDay),
-        dailySalesId: IsNull(),
-      },
-      relations: ['customer'],
-      order: { createdAt: 'DESC' },
-    });
+    return query.orderBy('bill.createdAt', 'DESC').getMany();
   }
 }

@@ -127,8 +127,15 @@ export const DailySales = () => {
       const product = productsData.products.find((p) => p.id === inv.productId);
       if (!product) return total;
 
-      const soldQuantity = inv.openingStock + inv.stockIn - inv.closingStock;
-      const revenue = soldQuantity * product.currentPrice;
+      // ✅ CRITICAL: Calculate sold quantity EXCLUDING conversions
+      const soldQuantity =
+        inv.openingStock +
+        inv.stockIn -
+        inv.closingStock -
+        (inv.convertedOut || 0); // Exclude bottles converted
+
+      const actualSold = Math.max(0, soldQuantity); // Ensure non-negative
+      const revenue = actualSold * product.currentPrice;
       return total + revenue;
     }, 0);
   };
@@ -174,6 +181,9 @@ export const DailySales = () => {
           productName: inv.product?.name,
           unit: inv.product?.unit,
           categoryId: inv.product?.categoryId,
+          // ✅ NEW: Include conversion fields
+          convertedOut: inv.convertedOut || 0,
+          convertedIn: inv.convertedIn || 0,
         }))
       );
       setExpenses(existingDailySales.expenses || []);
@@ -186,6 +196,43 @@ export const DailySales = () => {
       });
     }
   }, [existingDailySales]);
+
+  const handleStockPurchasesChange = (purchases: any[]) => {
+    // Calculate purchased quantities per product
+    const newPurchasesByProduct = new Map<string, number>();
+    purchases.forEach((purchase) => {
+      const current = newPurchasesByProduct.get(purchase.productId) || 0;
+      newPurchasesByProduct.set(
+        purchase.productId,
+        current + purchase.quantity
+      );
+    });
+
+    // Calculate from old purchases
+    const oldPurchasesByProduct = new Map<string, number>();
+    stockPurchases.forEach((purchase) => {
+      const current = oldPurchasesByProduct.get(purchase.productId) || 0;
+      oldPurchasesByProduct.set(
+        purchase.productId,
+        current + purchase.quantity
+      );
+    });
+
+    // Update inventories with new purchase quantities
+    setInventories((prev) =>
+      prev.map((inv) => {
+        const newPurchased = newPurchasesByProduct.get(inv.productId) || 0;
+        const oldPurchased = oldPurchasesByProduct.get(inv.productId) || 0;
+        const manualStockIn = inv.stockIn - oldPurchased;
+        return {
+          ...inv,
+          stockIn: manualStockIn + newPurchased,
+        };
+      })
+    );
+
+    setStockPurchases(purchases);
+  };
 
   const transferMutation = useMutation({
     mutationFn: async (data: {
@@ -261,6 +308,8 @@ export const DailySales = () => {
             openingStock: inv.closingStock, // Use closing stock from nearest previous
             stockIn: 0,
             closingStock: inv.closingStock,
+            // ✅ REMOVED: convertedOut and convertedIn
+            // These are backend-only fields managed during conversions
           })
         );
       }
@@ -273,6 +322,7 @@ export const DailySales = () => {
             openingStock: p.currentStock,
             stockIn: 0,
             closingStock: p.currentStock,
+            // ✅ REMOVED: convertedOut and convertedIn
           }));
       }
 
@@ -302,16 +352,43 @@ export const DailySales = () => {
   const handleSave = () => {
     if (!existingDailySales) return;
 
-    // Remove calculated/display fields from inventories before sending to backend
-    // soldQuantity, productName, unit, categoryId are for display only
+    // ✅ FIX #1: Remove database-generated fields before sending to backend
     const cleanInventories = inventories.map(
-      ({ soldQuantity, productName, unit, categoryId, ...rest }) => rest
+      ({
+        soldQuantity, // Remove - calculated field
+        productName, // Remove - display field
+        unit, // Remove - display field
+        categoryId, // Remove - display field
+        convertedOut, // Remove - backend manages this
+        convertedIn, // Remove - backend manages this
+        revenue, // Remove - calculated field
+        productPrice, // Remove - managed by backend
+        ...rest
+      }) => rest
     );
+
+    // ✅ FIX #1: Strip database-generated fields from expenses
+    const cleanExpenses = expenses.map((exp) => ({
+      category: exp.category,
+      description: exp.description,
+      amount: exp.amount,
+      paymentMethod: exp.paymentMethod || "cash",
+    }));
+
+    // ✅ FIX #1: Strip database-generated fields from stock purchases
+    const cleanStockPurchases = stockPurchases.map((sp) => ({
+      productId: sp.productId,
+      quantity: sp.quantity,
+      unitCost: sp.unitCost,
+      paymentMethod: sp.paymentMethod || "cash",
+      supplier: sp.supplier || "",
+      notes: sp.notes || "",
+    }));
 
     saveMutation.mutate({
       inventories: cleanInventories,
-      expenses,
-      stockPurchases,
+      expenses: cleanExpenses,
+      stockPurchases: cleanStockPurchases,
       notes,
       ...revenueData,
     });
@@ -529,7 +606,7 @@ export const DailySales = () => {
           <DailySalesStockPurchases
             stockPurchases={stockPurchases}
             products={productsData?.products || []}
-            onStockPurchasesChange={setStockPurchases}
+            onStockPurchasesChange={handleStockPurchasesChange}
             isDisabled={isFinalized}
           />
 
@@ -618,6 +695,14 @@ export const DailySales = () => {
               onSubmit={(data) => {
                 if (!selectedBottle.linkedShotProductId) {
                   toast.error("No linked shot product found");
+                  return;
+                }
+
+                // ✅ FIX #4: Proper bottle conversion implementation
+                if (!existingDailySales) {
+                  toast.error(
+                    "Please save the daily sales draft before converting bottles"
+                  );
                   return;
                 }
 

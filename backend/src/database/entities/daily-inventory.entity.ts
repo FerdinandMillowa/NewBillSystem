@@ -41,6 +41,14 @@ export class DailyInventory {
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   revenue: number; // soldQuantity * productPrice
 
+  // ✅ NEW: Track bottles converted to shots (NOT sales)
+  @Column({ type: 'int', name: 'converted_out', default: 0 })
+  convertedOut: number;
+
+  // ✅ NEW: Track shots received from bottle conversion
+  @Column({ type: 'int', name: 'converted_in', default: 0 })
+  convertedIn: number;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 

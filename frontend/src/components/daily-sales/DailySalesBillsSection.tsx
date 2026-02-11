@@ -60,18 +60,12 @@ export const DailySalesBillsSection = ({
       });
     },
     onSuccess: () => {
-      // ✅ CRITICAL FIX: Invalidate all related queries
-      queryClient.invalidateQueries({
-        queryKey: ["bills-by-date", selectedDate],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["bills"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["customers"],
-      });
+      // ✅ FIX #6: Only invalidate what changed
       queryClient.invalidateQueries({
         queryKey: ["daily-sales-by-date", selectedDate],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["bills-by-date", selectedDate],
       });
 
       toast.success("Bill created successfully!");

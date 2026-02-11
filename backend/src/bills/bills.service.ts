@@ -24,7 +24,6 @@ export class BillsService {
   async create(createBillDto: CreateBillDto): Promise<Bill> {
     const { customerId, dailySalesId, amount, description } = createBillDto;
 
-    // Verify customer exists and is approved
     const customer = await this.customerRepository.findOne({
       where: { id: customerId },
     });
@@ -39,15 +38,14 @@ export class BillsService {
       );
     }
 
-    // ✅ FIXED: Create bill object correctly
+    // ✅ FIX: Respect the provided dailySalesId to link bills correctly
     const bill = this.billRepository.create({
       customerId,
       amount,
       description,
-      dailySalesId: dailySalesId || null, // ✅ Handle null correctly
+      dailySalesId: dailySalesId || null,
     });
 
-    // ✅ FIXED: Save returns Bill, not Bill[]
     return await this.billRepository.save(bill);
   }
 
@@ -63,12 +61,10 @@ export class BillsService {
       .createQueryBuilder('bill')
       .leftJoinAndSelect('bill.customer', 'customer');
 
-    // Filter by customer
     if (customerId) {
       queryBuilder.where('bill.customerId = :customerId', { customerId });
     }
 
-    // Search by description or customer name
     if (search) {
       queryBuilder.andWhere(
         '(bill.description ILIKE :search OR customer.firstName ILIKE :search OR customer.lastName ILIKE :search)',
@@ -76,11 +72,8 @@ export class BillsService {
       );
     }
 
-    // Pagination
     const skip = (page - 1) * limit;
     queryBuilder.skip(skip).take(limit);
-
-    // Order by creation date (newest first)
     queryBuilder.orderBy('bill.createdAt', 'DESC');
 
     const [bills, total] = await queryBuilder.getManyAndCount();
@@ -96,7 +89,7 @@ export class BillsService {
   async findOne(id: string): Promise<Bill> {
     const bill = await this.billRepository.findOne({
       where: { id },
-      relations: ['customer', 'dailySales'], // ✅ Include dailySales relation
+      relations: ['customer', 'dailySales'],
     });
 
     if (!bill) {
@@ -107,7 +100,6 @@ export class BillsService {
   }
 
   async findByCustomer(customerId: string): Promise<Bill[]> {
-    // Verify customer exists
     const customer = await this.customerRepository.findOne({
       where: { id: customerId },
     });
@@ -119,7 +111,7 @@ export class BillsService {
     return this.billRepository.find({
       where: { customerId },
       order: { createdAt: 'DESC' },
-      relations: ['dailySales'], // ✅ Include dailySales relation
+      relations: ['dailySales'],
     });
   }
 
@@ -132,7 +124,6 @@ export class BillsService {
       throw new NotFoundException('Bill not found');
     }
 
-    // Update bill
     Object.assign(bill, updateBillDto);
     return this.billRepository.save(bill);
   }
@@ -147,7 +138,6 @@ export class BillsService {
     }
 
     await this.billRepository.remove(bill);
-
     return { message: 'Bill deleted successfully' };
   }
 
@@ -174,7 +164,6 @@ export class BillsService {
       .select('AVG(bill.amount)', 'average')
       .getRawOne();
 
-    // Get bills by month (last 6 months)
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
@@ -202,7 +191,7 @@ export class BillsService {
 
   async getRecentBills(limit: number = 10): Promise<Bill[]> {
     return this.billRepository.find({
-      relations: ['customer', 'dailySales'], // ✅ Include dailySales relation
+      relations: ['customer', 'dailySales'],
       order: { createdAt: 'DESC' },
       take: limit,
     });
