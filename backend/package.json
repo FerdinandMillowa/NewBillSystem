@@ -22,9 +22,7 @@
     "migration:run": "npm run typeorm migration:run -- -d src/database/data-source.ts",
     "migration:revert": "npm run typeorm migration:revert -- -d src/database/data-source.ts",
     "migration:generate": "npm run typeorm migration:generate -- -d src/database/data-source.ts",
-    "migration:create": "npm run typeorm migration:create",
-     "start:dev:local": "cross-env NODE_ENV=development node -r dotenv/config dist/main dotenv_config_path=.env.local",
-  "start:dev:supabase": "cross-env NODE_ENV=development node -r dotenv/config dist/main dotenv_config_path=.env.production"
+    "migration:create": "npm run typeorm migration:create"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^3.0.1",
