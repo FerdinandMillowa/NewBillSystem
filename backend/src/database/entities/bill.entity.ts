@@ -27,6 +27,9 @@ export class Bill {
   @Column({ name: 'daily_sales_id', type: 'uuid', nullable: true })
   dailySalesId: string | null; // ✅ Change to string | null
 
+  @Column({ type: 'date', name: 'transaction_date' })
+  transactionDate: Date;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 

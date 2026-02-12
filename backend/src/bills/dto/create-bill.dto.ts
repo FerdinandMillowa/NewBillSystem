@@ -24,4 +24,8 @@ export class CreateBillDto {
   @IsString()
   @IsNotEmpty()
   description: string;
+
+  @IsOptional()
+  @IsString()
+  transactionDate?: string;
 }

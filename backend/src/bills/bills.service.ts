@@ -11,6 +11,7 @@ import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { QueryBillsDto } from './dto/query-bills.dto';
 import { CustomerStatus } from '../common/enums';
+import { DailySales } from '../database/entities/daily-sales.entity';
 
 @Injectable()
 export class BillsService {
@@ -19,10 +20,13 @@ export class BillsService {
     private billRepository: Repository<Bill>,
     @InjectRepository(Customer)
     private customerRepository: Repository<Customer>,
+    @InjectRepository(DailySales)
+    private dailySalesRepository: Repository<DailySales>,
   ) {}
 
   async create(createBillDto: CreateBillDto): Promise<Bill> {
-    const { customerId, dailySalesId, amount, description } = createBillDto;
+    const { customerId, dailySalesId, amount, description, transactionDate } =
+      createBillDto;
 
     const customer = await this.customerRepository.findOne({
       where: { id: customerId },
@@ -38,12 +42,25 @@ export class BillsService {
       );
     }
 
-    // ✅ FIX: Respect the provided dailySalesId to link bills correctly
+    // ✅ Determine business date
+    let businessDate = transactionDate ? new Date(transactionDate) : new Date();
+
+    // ✅ If linked to daily sales, use that date
+    if (dailySalesId && !transactionDate) {
+      const dailySales = await this.dailySalesRepository.findOne({
+        where: { id: dailySalesId },
+      });
+      if (dailySales) {
+        businessDate = dailySales.date;
+      }
+    }
+
     const bill = this.billRepository.create({
       customerId,
       amount,
       description,
       dailySalesId: dailySalesId || null,
+      transactionDate: businessDate, // ✅ SET TRANSACTION DATE
     });
 
     return await this.billRepository.save(bill);

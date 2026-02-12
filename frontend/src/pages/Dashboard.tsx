@@ -4,6 +4,7 @@ import { customersService } from "../services/customers.service";
 import { billsService } from "../services/bills.service";
 import { paymentsService } from "../services/payments.service";
 import { Card } from "../components/ui/Card";
+import { Button } from "../components/ui/Button";
 import {
   formatCurrency,
   formatDate,
@@ -20,6 +21,9 @@ import {
   ExclamationTriangleIcon,
   ShoppingBagIcon,
   ChartBarIcon,
+  BanknotesIcon,
+  MinusCircleIcon,
+  ShoppingCartIcon,
 } from "@heroicons/react/24/outline";
 import {
   LineChart,
@@ -90,15 +94,6 @@ export const Dashboard = () => {
     queryKey: ["daily-sales-summary"],
     queryFn: () => reportsService.getDailySalesSummary(),
   });
-
-  // Calculate actual changes for operations stats
-  const calculateYesterdayChange = (currentValue: number) => {
-    // For now, we'll show no change until we implement actual yesterday comparison
-    return {
-      change: "0%",
-      changeType: "neutral" as "positive" | "negative" | "neutral",
-    };
-  };
 
   if (dashboardError) {
     return (
@@ -174,47 +169,6 @@ export const Dashboard = () => {
       subtext: `${
         dashboardData?.revenue?.collectionRate?.toFixed(1) || 0
       }% collected`,
-    },
-  ];
-
-  // Daily Operations Module Stats
-  const operationsStats = [
-    {
-      name: "Today's Sales",
-      value: formatCurrency(dailySalesSummary?.summary?.totalSales || 0),
-      icon: ShoppingBagIcon,
-      color: "bg-indigo-500",
-      subtext: `${dailySalesSummary?.summary?.totalDays || 0} days`,
-      ...calculateYesterdayChange(dailySalesSummary?.summary?.totalSales || 0),
-    },
-    {
-      name: "Today's Revenue",
-      value: formatCurrency(dailySalesSummary?.summary?.totalCollected || 0),
-      icon: CurrencyDollarIcon,
-      color: "bg-emerald-500",
-      subtext: `${formatCurrency(
-        dailySalesSummary?.summary?.totalNetRevenue || 0
-      )} net`,
-      ...calculateYesterdayChange(
-        dailySalesSummary?.summary?.totalCollected || 0
-      ),
-    },
-    {
-      name: "Today's Expenses",
-      value: formatCurrency(dailySalesSummary?.summary?.totalExpenses || 0),
-      icon: ChartBarIcon,
-      color: "bg-amber-500",
-      subtext: "Operating costs",
-      ...calculateYesterdayChange(
-        dailySalesSummary?.summary?.totalExpenses || 0
-      ),
-    },
-    {
-      name: "Collection Rate",
-      value: `${dashboardData?.revenue?.collectionRate?.toFixed(1) || 0}%`,
-      icon: CreditCardIcon,
-      color: "bg-cyan-500",
-      subtext: "Daily target: 95%",
     },
   ];
 
@@ -333,7 +287,6 @@ export const Dashboard = () => {
                     labelStyle={{ color: "#000" }}
                   />
                   <Legend />
-                  {/* SIGNIFICANT CHANGE: Plot billsAmount and paymentsAmount (billing domain) */}
                   <Line
                     type="monotone"
                     dataKey="billsAmount"
@@ -494,91 +447,180 @@ export const Dashboard = () => {
         </div>
       </div>
 
-      {/* Daily Operations Module */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-900">
-            Daily Operations Module
+      {/* =============== REPLACED: Daily Operations Module =============== */}
+      {/* Daily Operations */}
+      <Card>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold text-gray-900">
+            Daily Operations
           </h2>
-          <Link
-            to="/reports?tab=operations"
-            className="text-sm text-primary-600 hover:text-primary-700"
-          >
-            View detailed reports →
+          <Link to="/daily-sales">
+            <Button variant="secondary" size="sm">
+              View All
+            </Button>
           </Link>
         </div>
 
-        {/* Operations Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {operationsStats.map((stat) => (
-            <Card
-              key={stat.name}
-              className="relative overflow-hidden hover:shadow-lg transition-shadow"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">{stat.name}</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-2">
-                    {stat.value}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">{stat.subtext}</p>
-                </div>
-                <div className={`p-3 rounded-lg ${stat.color}`}>
-                  <stat.icon className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              {stat.change && (
-                <div className="mt-4 flex items-center">
-                  <span
-                    className={`text-sm font-medium ${
-                      stat.changeType === "positive"
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          {/* Today's Sales */}
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-700 font-medium">
+                  Today's Sales
+                </p>
+                <p className="text-2xl font-bold text-blue-900 mt-1">
+                  {formatCurrency(dashboardData?.todaySales?.totalSales || 0)}
+                </p>
+                {dashboardData?.yesterdaySales && (
+                  <p
+                    className={`text-xs mt-1 flex items-center ${
+                      (dashboardData.todaySales?.totalSales || 0) >=
+                      (dashboardData.yesterdaySales?.totalSales || 0)
                         ? "text-green-600"
-                        : stat.changeType === "negative"
-                        ? "text-red-600"
-                        : "text-gray-600"
+                        : "text-red-600"
                     }`}
                   >
-                    {stat.change}
-                  </span>
-                  <span className="text-xs text-gray-500 ml-2">
-                    vs yesterday
-                  </span>
-                </div>
-              )}
-            </Card>
-          ))}
-        </div>
-
-        {/* Quick Stats Bar */}
-        <Card>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="text-center">
-              <p className="text-3xl font-bold text-primary-600">
-                {dashboardData?.revenue?.collectionRate?.toFixed(1) || 0}%
-              </p>
-              <p className="text-sm text-gray-600 mt-1">Collection Rate</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-green-600">
-                {dashboardData?.customers?.approved || 0}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">Active Customers</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-purple-600">
-                {dashboardData?.bills?.total || 0}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">Total Bills</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-blue-600">
-                {dashboardData?.payments?.total || 0}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">Total Payments</p>
+                    {(() => {
+                      const today = dashboardData.todaySales?.totalSales || 0;
+                      const yesterday =
+                        dashboardData.yesterdaySales?.totalSales || 0;
+                      if (yesterday === 0) return "No comparison";
+                      const change = (
+                        ((today - yesterday) / yesterday) *
+                        100
+                      ).toFixed(1);
+                      return `${change > 0 ? "+" : ""}${change}% vs yesterday`;
+                    })()}
+                  </p>
+                )}
+              </div>
+              <CurrencyDollarIcon className="w-10 h-10 text-blue-600" />
             </div>
           </div>
-        </Card>
-      </div>
+
+          {/* Cash at Hand */}
+          <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-700 font-medium">
+                  Cash at Hand
+                </p>
+                <p className="text-2xl font-bold text-green-900 mt-1">
+                  {formatCurrency(dashboardData?.todaySales?.cashAtHand || 0)}
+                </p>
+                <p className="text-xs text-green-600 mt-1">
+                  {dashboardData?.todaySales?.status === "draft"
+                    ? "Draft"
+                    : "Finalized"}
+                </p>
+              </div>
+              <BanknotesIcon className="w-10 h-10 text-green-600" />
+            </div>
+          </div>
+
+          {/* Today's Expenses */}
+          <div className="bg-gradient-to-br from-red-50 to-red-100 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-red-700 font-medium">
+                  Today's Expenses
+                </p>
+                <p className="text-2xl font-bold text-red-900 mt-1">
+                  {formatCurrency(
+                    dashboardData?.todaySales?.totalExpenses || 0
+                  )}
+                </p>
+                {dashboardData?.yesterdaySales && (
+                  <p
+                    className={`text-xs mt-1 flex items-center ${
+                      (dashboardData.todaySales?.totalExpenses || 0) <=
+                      (dashboardData.yesterdaySales?.totalExpenses || 0)
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {(() => {
+                      const today =
+                        dashboardData.todaySales?.totalExpenses || 0;
+                      const yesterday =
+                        dashboardData.yesterdaySales?.totalExpenses || 0;
+                      if (yesterday === 0) return "No comparison";
+                      const change = (
+                        ((today - yesterday) / yesterday) *
+                        100
+                      ).toFixed(1);
+                      return `${change > 0 ? "+" : ""}${change}% vs yesterday`;
+                    })()}
+                  </p>
+                )}
+              </div>
+              <MinusCircleIcon className="w-10 h-10 text-red-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Net Revenue & Stock Purchases */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-sm text-purple-700 font-medium">
+                  Net Revenue
+                </p>
+                <p className="text-xl font-bold text-purple-900 mt-1">
+                  {formatCurrency(dashboardData?.todaySales?.netRevenue || 0)}
+                </p>
+                <p className="text-xs text-purple-600 mt-1">Sales - Expenses</p>
+              </div>
+              <ArrowTrendingUpIcon className="w-8 h-8 text-purple-600" />
+            </div>
+          </div>
+
+          <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-sm text-orange-700 font-medium">
+                  Stock Purchases
+                </p>
+                <p className="text-xl font-bold text-orange-900 mt-1">
+                  {formatCurrency(
+                    dashboardData?.todaySales?.totalStockPurchases || 0
+                  )}
+                </p>
+                <p className="text-xs text-orange-600 mt-1">
+                  Inventory restocked
+                </p>
+              </div>
+              <ShoppingCartIcon className="w-8 h-8 text-orange-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Action */}
+        {dashboardData?.todaySales?.status !== "finalized" && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <ExclamationTriangleIcon className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-yellow-800">
+                  Today's sales not finalized
+                </p>
+                <p className="text-xs text-yellow-700 mt-1">
+                  Complete today's inventory and finalize to lock in the
+                  records.
+                </p>
+                <Link to="/daily-sales" className="inline-block mt-2">
+                  <Button variant="secondary" size="sm">
+                    Go to Daily Sales
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+      {/* =============== END REPLACED: Daily Operations Module =============== */}
     </div>
   );
 };

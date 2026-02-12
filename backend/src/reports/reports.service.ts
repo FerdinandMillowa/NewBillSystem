@@ -57,6 +57,10 @@ export class ReportsService {
   async getDashboardStats(): Promise<any> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    
+    // Get yesterday's date
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
 
     const [
       totalCustomers,
@@ -66,6 +70,7 @@ export class ReportsService {
       totalPayments,
       totalPaymentsAmount,
       todaySales,
+      yesterdaySales,
       thisMonthSales,
     ] = await Promise.all([
       this.customerRepository.count(),
@@ -83,6 +88,7 @@ export class ReportsService {
         .select('SUM(payment.amount)', 'total')
         .getRawOne(),
       this.dailySalesRepository.findOne({ where: { date: today } }),
+      this.dailySalesRepository.findOne({ where: { date: yesterday } }),
       this.dailySalesRepository
         .createQueryBuilder('sales')
         .select('SUM(sales.total_sales)', 'totalSales')
@@ -119,6 +125,21 @@ export class ReportsService {
         collectionRate:
           billsAmount > 0 ? (paymentsAmount / billsAmount) * 100 : 0,
       },
+      // TODAY'S SALES - Full object with all fields Dashboard expects
+      todaySales: todaySales ? {
+        totalSales: parseFloat(todaySales.totalSales?.toString() || '0'),
+        totalExpenses: parseFloat(todaySales.totalExpenses?.toString() || '0'),
+        cashAtHand: parseFloat(todaySales.cashAtHand?.toString() || '0'),
+        netRevenue: parseFloat(todaySales.netRevenue?.toString() || '0'),
+        totalStockPurchases: parseFloat(todaySales.totalStockPurchases?.toString() || '0'),
+        status: todaySales.status || 'draft',
+        date: todaySales.date,
+      } : null,
+      // YESTERDAY'S SALES - For comparison
+      yesterdaySales: yesterdaySales ? {
+        totalSales: parseFloat(yesterdaySales.totalSales?.toString() || '0'),
+        totalExpenses: parseFloat(yesterdaySales.totalExpenses?.toString() || '0'),
+      } : null,
       todayTotalSales: todaySales
         ? parseFloat(todaySales.totalSales?.toString() || '0')
         : 0,

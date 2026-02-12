@@ -17,6 +17,7 @@ export const billSchema = z.object({
   customerId: z.string().uuid('Please select a customer'),
   amount: z.number().min(0, 'Amount must be positive'),
   description: z.string().min(3, 'Description must be at least 3 characters'),
+  transactionDate: z.string().optional(),
 });
 
 export const paymentSchema = z.object({

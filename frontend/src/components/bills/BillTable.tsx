@@ -71,7 +71,7 @@ export const BillTable = ({
                 Amount
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Date
+                Transaction Date
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -118,7 +118,10 @@ export const BillTable = ({
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatDate(bill.createdAt)}
+                  {formatDate(bill.transactionDate)}
+                  <div className="text-xs text-gray-400">
+                    Created: {formatDate(bill.createdAt)}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                   <button
