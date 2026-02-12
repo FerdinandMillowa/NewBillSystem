@@ -88,12 +88,40 @@ export const Dashboard = () => {
     queryFn: () => reportsService.getBillingPaymentMethods(),
   });
 
-  // NEW: Daily Operations queries
-  // FIX APPLIED IN reports.service.ts: This call now defaults to a valid date range.
+  // NEW: Daily Operations queries - Get weekly summary
   const { data: dailySalesSummary } = useQuery({
     queryKey: ["daily-sales-summary"],
     queryFn: () => reportsService.getDailySalesSummary(),
   });
+
+  // Calculate weekly totals from daily breakdown
+  const calculateWeeklySummary = () => {
+    if (!dailySalesSummary?.dailyBreakdown) {
+      return {
+        totalSales: 0,
+        totalExpenses: 0,
+        totalStockPurchases: 0,
+        netRevenue: 0,
+        daysCount: 0,
+      };
+    }
+
+    // Get last 7 days of data
+    const last7Days = dailySalesSummary.dailyBreakdown.slice(-7);
+
+    return {
+      totalSales: last7Days.reduce((sum, day) => sum + day.totalSales, 0),
+      totalExpenses: last7Days.reduce((sum, day) => sum + day.totalExpenses, 0),
+      totalStockPurchases: last7Days.reduce(
+        (sum, day) => sum + (day.stockPurchasesAmount || 0),
+        0
+      ),
+      netRevenue: last7Days.reduce((sum, day) => sum + day.netRevenue, 0),
+      daysCount: last7Days.length,
+    };
+  };
+
+  const weeklySummary = calculateWeeklySummary();
 
   if (dashboardError) {
     return (
@@ -447,14 +475,14 @@ export const Dashboard = () => {
         </div>
       </div>
 
-      {/* =============== REPLACED: Daily Operations Module =============== */}
+      {/* =============== UPDATED: Daily Operations Module - 7 Day Summary =============== */}
       {/* Daily Operations */}
       <Card>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-gray-900">
             Daily Operations
           </h2>
-          <Link to="/daily-sales">
+          <Link to="/reports?tab=operations">
             <Button variant="secondary" size="sm">
               View All
             </Button>
@@ -462,118 +490,75 @@ export const Dashboard = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {/* Today's Sales */}
+          {/* Weekly Sales */}
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-blue-700 font-medium">
-                  Today's Sales
+                  This Week's Sales
                 </p>
                 <p className="text-2xl font-bold text-blue-900 mt-1">
-                  {formatCurrency(dashboardData?.todaySales?.totalSales || 0)}
+                  {formatCurrency(weeklySummary.totalSales)}
                 </p>
-                {dashboardData?.yesterdaySales && (
-                  <p
-                    className={`text-xs mt-1 flex items-center ${
-                      (dashboardData.todaySales?.totalSales || 0) >=
-                      (dashboardData.yesterdaySales?.totalSales || 0)
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {(() => {
-                      const today = dashboardData.todaySales?.totalSales || 0;
-                      const yesterday =
-                        dashboardData.yesterdaySales?.totalSales || 0;
-                      if (yesterday === 0) return "No comparison";
-                      const change = (
-                        ((today - yesterday) / yesterday) *
-                        100
-                      ).toFixed(1);
-                      return `${change > 0 ? "+" : ""}${change}% vs yesterday`;
-                    })()}
-                  </p>
-                )}
+                <p className="text-xs text-blue-600 mt-1">
+                  Last 7 days • {weeklySummary.daysCount} days
+                </p>
               </div>
-              <CurrencyDollarIcon className="w-10 h-10 text-blue-600" />
+              <ShoppingBagIcon className="w-10 h-10 text-blue-600" />
             </div>
           </div>
 
-          {/* Cash at Hand */}
+          {/* Weekly Net Revenue */}
           <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-green-700 font-medium">
-                  Cash at Hand
+                  Net Revenue
                 </p>
                 <p className="text-2xl font-bold text-green-900 mt-1">
-                  {formatCurrency(dashboardData?.todaySales?.cashAtHand || 0)}
+                  {formatCurrency(weeklySummary.netRevenue)}
                 </p>
                 <p className="text-xs text-green-600 mt-1">
-                  {dashboardData?.todaySales?.status === "draft"
-                    ? "Draft"
-                    : "Finalized"}
+                  Sales - Expenses - Stock
                 </p>
               </div>
-              <BanknotesIcon className="w-10 h-10 text-green-600" />
+              <ArrowTrendingUpIcon className="w-10 h-10 text-green-600" />
             </div>
           </div>
 
-          {/* Today's Expenses */}
+          {/* Weekly Expenses */}
           <div className="bg-gradient-to-br from-red-50 to-red-100 p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-red-700 font-medium">
-                  Today's Expenses
+                  This Week's Expenses
                 </p>
                 <p className="text-2xl font-bold text-red-900 mt-1">
-                  {formatCurrency(
-                    dashboardData?.todaySales?.totalExpenses || 0
-                  )}
+                  {formatCurrency(weeklySummary.totalExpenses)}
                 </p>
-                {dashboardData?.yesterdaySales && (
-                  <p
-                    className={`text-xs mt-1 flex items-center ${
-                      (dashboardData.todaySales?.totalExpenses || 0) <=
-                      (dashboardData.yesterdaySales?.totalExpenses || 0)
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {(() => {
-                      const today =
-                        dashboardData.todaySales?.totalExpenses || 0;
-                      const yesterday =
-                        dashboardData.yesterdaySales?.totalExpenses || 0;
-                      if (yesterday === 0) return "No comparison";
-                      const change = (
-                        ((today - yesterday) / yesterday) *
-                        100
-                      ).toFixed(1);
-                      return `${change > 0 ? "+" : ""}${change}% vs yesterday`;
-                    })()}
-                  </p>
-                )}
+                <p className="text-xs text-red-600 mt-1">Operating costs</p>
               </div>
               <MinusCircleIcon className="w-10 h-10 text-red-600" />
             </div>
           </div>
         </div>
 
-        {/* Net Revenue & Stock Purchases */}
+        {/* Stock Purchases & Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <p className="text-sm text-purple-700 font-medium">
-                  Net Revenue
+                  Stock Purchases (7 days)
                 </p>
                 <p className="text-xl font-bold text-purple-900 mt-1">
-                  {formatCurrency(dashboardData?.todaySales?.netRevenue || 0)}
+                  {formatCurrency(weeklySummary.totalStockPurchases)}
                 </p>
-                <p className="text-xs text-purple-600 mt-1">Sales - Expenses</p>
+                <p className="text-xs text-purple-600 mt-1">
+                  Inventory restocked
+                </p>
               </div>
-              <ArrowTrendingUpIcon className="w-8 h-8 text-purple-600" />
+              <ShoppingCartIcon className="w-8 h-8 text-purple-600" />
             </div>
           </div>
 
@@ -581,23 +566,25 @@ export const Dashboard = () => {
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <p className="text-sm text-orange-700 font-medium">
-                  Stock Purchases
+                  Daily Average
                 </p>
                 <p className="text-xl font-bold text-orange-900 mt-1">
                   {formatCurrency(
-                    dashboardData?.todaySales?.totalStockPurchases || 0
+                    weeklySummary.daysCount > 0
+                      ? weeklySummary.totalSales / weeklySummary.daysCount
+                      : 0
                   )}
                 </p>
                 <p className="text-xs text-orange-600 mt-1">
-                  Inventory restocked
+                  Per day this week
                 </p>
               </div>
-              <ShoppingCartIcon className="w-8 h-8 text-orange-600" />
+              <ChartBarIcon className="w-8 h-8 text-orange-600" />
             </div>
           </div>
         </div>
 
-        {/* Quick Action */}
+        {/* Quick Action - Show if today's sales not finalized */}
         {dashboardData?.todaySales?.status !== "finalized" && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <div className="flex items-start">
@@ -620,7 +607,7 @@ export const Dashboard = () => {
           </div>
         )}
       </Card>
-      {/* =============== END REPLACED: Daily Operations Module =============== */}
+      {/* =============== END UPDATED: Daily Operations Module =============== */}
     </div>
   );
 };
