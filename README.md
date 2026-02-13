@@ -2,7 +2,7 @@
 
 A comprehensive, full-stack bar management system designed specifically for small and medium bar/restaurant operations with customer billing, inventory tracking, and comprehensive analytics.
 
-![Version](https://img.shields.io/badge/version-5.0.0-blue)
+![Version](https://img.shields.io/badge/version-6.1.0-blue)
 ![Status](https://img.shields.io/badge/status-Production%20Ready-brightgreen)
 ![License](https://img.shields.io/badge/license-Proprietary-orange)
 
