@@ -511,6 +511,7 @@ export const DailySales = () => {
           billsAmount={billsAmount}
           isDisabled={isFinalized}
           onBillCreated={() => refetchSales()}
+          existingDailySales={existingDailySales}
         />
       )}
 

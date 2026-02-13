@@ -20,6 +20,7 @@ interface DailySalesBillsSectionProps {
   billsAmount: number;
   isDisabled?: boolean;
   onBillCreated: () => void;
+  existingDailySales?: any; // ✅ ADD THIS
 }
 
 export const DailySalesBillsSection = ({
@@ -28,6 +29,7 @@ export const DailySalesBillsSection = ({
   billsAmount,
   isDisabled = false,
   onBillCreated,
+  existingDailySales, // ✅ ADD THIS
 }: DailySalesBillsSectionProps) => {
   const queryClient = useQueryClient();
   const [showBillForm, setShowBillForm] = useState(false);
@@ -47,17 +49,26 @@ export const DailySalesBillsSection = ({
       }),
   });
 
-  // ✅ FIXED: Create bill mutation with proper query invalidation
+  // ✅ FIXED: Create bill mutation - ONLY works if daily sales record exists
   const createBillMutation = useMutation({
     mutationFn: async (data: any) => {
-      // ✅ CRITICAL FIX: Get or create draft Daily Sales for selected date
-      const dailySales = await dailySalesService.getOrCreateDraft(selectedDate);
+      // ✅ FIX: Only create bill if daily sales record EXISTS
+      // Do NOT auto-create draft
+      try {
+        const dailySales = await dailySalesService.getByDate(selectedDate);
 
-      // ✅ Create bill with Daily Sales ID
-      return billsService.create({
-        ...data,
-        dailySalesId: dailySales.id, // ✅ Link to correct Daily Sales
-      });
+        return billsService.create({
+          ...data,
+          dailySalesId: dailySales.id,
+        });
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          throw new Error(
+            "Please create a daily sales record first before adding bills"
+          );
+        }
+        throw error;
+      }
     },
     onSuccess: () => {
       // ✅ FIX #6: Only invalidate what changed
@@ -78,7 +89,11 @@ export const DailySalesBillsSection = ({
       onBillCreated();
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to create bill");
+      toast.error(
+        error.message ||
+          error.response?.data?.message ||
+          "Failed to create bill"
+      );
     },
   });
 
@@ -162,111 +177,125 @@ export const DailySalesBillsSection = ({
         </div>
       )}
 
-      {/* Add Bill Button/Form */}
-      {!isDisabled && (
-        <>
-          {!showBillForm ? (
-            <Button
-              variant="secondary"
-              onClick={() => setShowBillForm(true)}
-              className="w-full flex items-center justify-center"
-            >
-              <PlusIcon className="w-5 h-5 mr-2" />
-              Create Bill for This Date
-            </Button>
-          ) : (
-            <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
-                Create New Bill
-              </h4>
+      {/* Add Bill Button/Form - ONLY show if daily sales record exists */}
+      {!isDisabled &&
+        existingDailySales && ( // ✅ ADD existingDailySales check
+          <>
+            {!showBillForm ? (
+              <Button
+                variant="secondary"
+                onClick={() => setShowBillForm(true)}
+                className="w-full flex items-center justify-center"
+              >
+                <PlusIcon className="w-5 h-5 mr-2" />
+                Create Bill for This Date
+              </Button>
+            ) : (
+              <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                  Create New Bill
+                </h4>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Customer Selection */}
-                <div>
-                  <label className="label text-xs">
-                    Customer <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={newBill.customerId}
-                    onChange={(e) =>
-                      setNewBill({ ...newBill, customerId: e.target.value })
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Customer Selection */}
+                  <div>
+                    <label className="label text-xs">
+                      Customer <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={newBill.customerId}
+                      onChange={(e) =>
+                        setNewBill({ ...newBill, customerId: e.target.value })
+                      }
+                      className="input text-sm"
+                    >
+                      <option value="">Select customer</option>
+                      {customersData?.customers?.map((customer: any) => (
+                        <option key={customer.id} value={customer.id}>
+                          {getCustomerName(customer)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Amount */}
+                  <div>
+                    <label className="label text-xs">
+                      Amount (MK) <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newBill.amount}
+                      onChange={(e) =>
+                        setNewBill({
+                          ...newBill,
+                          amount: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      placeholder="0.00"
+                      className="text-sm"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="label text-xs">Description</label>
+                    <Input
+                      type="text"
+                      value={newBill.description}
+                      onChange={(e) =>
+                        setNewBill({ ...newBill, description: e.target.value })
+                      }
+                      placeholder="Optional description"
+                      className="text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <Button
+                    variant="primary"
+                    onClick={handleCreateBill}
+                    isLoading={createBillMutation.isPending}
+                    disabled={
+                      !newBill.customerId ||
+                      newBill.amount <= 0 ||
+                      createBillMutation.isPending
                     }
-                    className="input text-sm"
+                    className="flex items-center"
                   >
-                    <option value="">Select customer</option>
-                    {customersData?.customers?.map((customer: any) => (
-                      <option key={customer.id} value={customer.id}>
-                        {getCustomerName(customer)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Amount */}
-                <div>
-                  <label className="label text-xs">
-                    Amount (MK) <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={newBill.amount}
-                    onChange={(e) =>
+                    <PlusIcon className="w-5 h-5 mr-2" />
+                    Create Bill
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setShowBillForm(false);
                       setNewBill({
-                        ...newBill,
-                        amount: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    placeholder="0.00"
-                    className="text-sm"
-                  />
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="label text-xs">Description</label>
-                  <Input
-                    type="text"
-                    value={newBill.description}
-                    onChange={(e) =>
-                      setNewBill({ ...newBill, description: e.target.value })
-                    }
-                    placeholder="Optional description"
-                    className="text-sm"
-                  />
+                        customerId: "",
+                        amount: 0,
+                        description: "",
+                      });
+                    }}
+                    disabled={createBillMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
                 </div>
               </div>
+            )}
+          </>
+        )}
 
-              <div className="flex items-center space-x-3">
-                <Button
-                  variant="primary"
-                  onClick={handleCreateBill}
-                  isLoading={createBillMutation.isPending}
-                  disabled={
-                    !newBill.customerId ||
-                    newBill.amount <= 0 ||
-                    createBillMutation.isPending
-                  }
-                  className="flex items-center"
-                >
-                  <PlusIcon className="w-5 h-5 mr-2" />
-                  Create Bill
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setShowBillForm(false);
-                    setNewBill({ customerId: "", amount: 0, description: "" });
-                  }}
-                  disabled={createBillMutation.isPending}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
-        </>
+      {/* ✅ ADD: Show message if no record exists */}
+      {!isDisabled && !existingDailySales && (
+        <div className="text-center py-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <p className="text-sm text-yellow-800">
+            Create a daily sales record first before adding bills
+          </p>
+        </div>
       )}
 
       {/* Info Box */}
