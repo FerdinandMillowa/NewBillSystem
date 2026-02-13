@@ -54,31 +54,20 @@ export const DailySales = () => {
     queryFn: () => productCategoriesService.getAll(),
   });
 
-  // Fetch daily sales record for the selected date
-  const {
-    data: existingDailySales,
-    isLoading: isSalesLoading,
-    refetch: refetchSales,
-  } = useQuery({
+  // Fetch existing daily sales (NO auto-create)
+  const { data: existingDailySales, isLoading: isSalesLoading } = useQuery({
     queryKey: ["daily-sales-by-date", selectedDate],
     queryFn: async () => {
-      const today = new Date().toISOString().split("T")[0];
-
-      // Only auto-create for today's date
-      if (selectedDate === today) {
-        return dailySalesService.getOrCreateDraft(selectedDate);
-      }
-
-      // For historical dates, just fetch (don't create)
       try {
         return await dailySalesService.getByDate(selectedDate);
       } catch (error: any) {
         if (error.response?.status === 404) {
-          return null;
+          return null; // No record exists
         }
         throw error;
       }
     },
+    retry: false,
   });
 
   // Get nearest finalized record before selected date
@@ -450,6 +439,7 @@ export const DailySales = () => {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
+              max={new Date().toISOString().split("T")[0]}
               className="input pl-10"
             />
           </div>
