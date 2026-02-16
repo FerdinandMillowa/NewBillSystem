@@ -15,6 +15,12 @@ export const reportsService = {
     const { data } = await api.get('/reports/monthly', { params });
     return data;
   },
+  
+  // Get monthly billing report (for Customer Billing module - uses bills & payments, not daily sales)
+  getMonthlyBilling: async (params?: { startDate?: string; endDate?: string }) => {
+    const { data } = await api.get('/reports/monthly-billing', { params });
+    return data;
+  },
 
   // Get payment methods distribution for TODAY'S daily sales (billing module)
   getPaymentMethods: async () => {
@@ -37,6 +43,24 @@ export const reportsService = {
   // Get top customers
   getTopCustomers: async (limit?: number) => {
     const { data } = await api.get('/reports/top-customers', { params: { limit } });
+    return data;
+  },
+
+  // Get top billers
+  getTopBillers: async (limit?: number) => {
+    const { data } = await api.get('/reports/top-billers', { params: { limit } });
+    return data;
+  },
+
+  // Get top payers
+  getTopPayers: async (limit?: number) => {
+    const { data } = await api.get('/reports/top-payers', { params: { limit } });
+    return data;
+  },
+
+  // Get overdue customers
+  getOverdueCustomers: async (limit?: number) => {
+    const { data } = await api.get('/reports/overdue-customers', { params: { limit } });
     return data;
   },
 

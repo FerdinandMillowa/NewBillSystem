@@ -62,16 +62,40 @@ export const Reports = () => {
     enabled: activeTab === "billing",
   });
 
+  // UPDATED: Customer billing monthly data (from bills & payments)
   const { data: billingMonthlyData } = useQuery({
-    queryKey: ["billing-monthly-report", dateRange],
-    queryFn: () => reportsService.getMonthly(dateRange),
-    enabled: activeTab === "billing",
+    queryKey: [
+      "monthly-billing-report",
+      dateRange.startDate,
+      dateRange.endDate,
+    ],
+    queryFn: () =>
+      reportsService.getMonthlyBilling({
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      }),
   });
 
   const { data: billingPaymentMethods } = useQuery({
     queryKey: ["billing-payment-methods", dateRange],
     queryFn: () => reportsService.getBillingPaymentMethods(dateRange),
     enabled: activeTab === "billing",
+  });
+
+  // Customer Billing insights
+  const { data: topBillers } = useQuery({
+    queryKey: ["top-billers"],
+    queryFn: () => reportsService.getTopBillers(5),
+  });
+
+  const { data: topPayers } = useQuery({
+    queryKey: ["top-payers"],
+    queryFn: () => reportsService.getTopPayers(5),
+  });
+
+  const { data: overdueCustomers } = useQuery({
+    queryKey: ["overdue-customers"],
+    queryFn: () => reportsService.getOverdueCustomers(5),
   });
 
   // Daily Operations Module queries
@@ -168,6 +192,13 @@ export const Reports = () => {
     setDateRange((prev) => ({ ...prev, [field]: value }));
   };
 
+  const billingMonthlyChartData =
+    billingMonthlyData?.map((item: any) => ({
+      month: item.month.substring(5),
+      billsAmount: item.billsAmount || 0,
+      paymentsAmount: item.paymentsAmount || 0,
+    })) || [];
+
   // Render Customer Billing Tab
   const renderBillingTab = () => (
     <div className="space-y-6">
@@ -249,9 +280,9 @@ export const Reports = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Monthly Trend Chart */}
         <Card title="Revenue Trend">
-          {billingMonthlyData && billingMonthlyData.length > 0 ? (
+          {billingMonthlyChartData && billingMonthlyChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={billingMonthlyData}>
+              <LineChart data={billingMonthlyChartData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
@@ -325,6 +356,122 @@ export const Reports = () => {
             <div className="flex items-center justify-center h-[300px] text-gray-500">
               No payment method data available
             </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Customer Insights Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Top Billers */}
+        <Card title="Top Billers">
+          {topBillers && topBillers.length > 0 ? (
+            <div className="space-y-3">
+              {topBillers.map((customer: any, index: number) => (
+                <div
+                  key={customer.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-600 font-bold text-sm">
+                      {index + 1}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {customer.name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {customer.billCount} bills
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-purple-600">
+                      {formatCurrency(customer.totalBilled)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-8">
+              No billing data yet
+            </p>
+          )}
+        </Card>
+
+        {/* Top Payers */}
+        <Card title="Top Payers">
+          {topPayers && topPayers.length > 0 ? (
+            <div className="space-y-3">
+              {topPayers.map((customer: any, index: number) => (
+                <div
+                  key={customer.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-600 font-bold text-sm">
+                      {index + 1}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {customer.name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {customer.paymentCount} payments
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-green-600">
+                      {formatCurrency(customer.totalPaid)}
+                    </p>
+                    {customer.balance > 0 && (
+                      <p className="text-xs text-red-500">
+                        Owes: {formatCurrency(customer.balance)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-8">
+              No payment data yet
+            </p>
+          )}
+        </Card>
+
+        {/* Customers with Outstanding Balances */}
+        <Card title="Outstanding Balances">
+          {overdueCustomers && overdueCustomers.length > 0 ? (
+            <div className="space-y-3">
+              {overdueCustomers.map((customer: any) => (
+                <div
+                  key={customer.customerId}
+                  className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100"
+                >
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">
+                      {customer.customerName}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Bills: {formatCurrency(customer.totalBills)} | Paid:{" "}
+                      {formatCurrency(customer.totalPayments)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-red-600">
+                      {formatCurrency(customer.balance)}
+                    </p>
+                    <p className="text-xs text-gray-500">Overdue</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-8">
+              All balances cleared! 🎉
+            </p>
           )}
         </Card>
       </div>

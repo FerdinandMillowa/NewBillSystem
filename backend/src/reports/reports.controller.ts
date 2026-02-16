@@ -35,7 +35,13 @@ export class ReportsController {
   getMonthlyReport(@Query() dateRangeDto: DateRangeDto) {
     return this.reportsService.getMonthlyReport(dateRangeDto);
   }
-
+  
+  // Get monthly billing report (for Customer Billing module)
+  @Get('monthly-billing')
+  getMonthlyBillingReport(@Query() dateRangeDto: DateRangeDto) {
+    return this.reportsService.getMonthlyBillingReport(dateRangeDto);
+  }
+  
   // Get weekly comparison (ANY authenticated user can view)
   @Get('weekly-comparison')
   getWeeklyComparison() {
@@ -54,6 +60,24 @@ export class ReportsController {
   @Roles(UserRole.ADMIN)
   getTopCustomers(@Query('limit') limit?: number): Promise<TopCustomer[]> {
     return this.reportsService.getTopCustomers(limit);
+  }
+
+  // Get top billers (customers with highest bills)
+  @Get('top-billers')
+  getTopBillers(@Query('limit') limit?: number) {
+    return this.reportsService.getTopBillers(limit);
+  }
+
+  // Get top payers (customers with highest payments)
+  @Get('top-payers')
+  getTopPayers(@Query('limit') limit?: number) {
+    return this.reportsService.getTopPayers(limit);
+  }
+
+  // Get customers with overdue balances
+  @Get('overdue-customers')
+  getOverdueCustomers(@Query('limit') limit?: number) {
+    return this.reportsService.getCustomersWithOverdueBalances(limit);
   }
 
   // ========================================

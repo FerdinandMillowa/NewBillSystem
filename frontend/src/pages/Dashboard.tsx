@@ -68,18 +68,19 @@ export const Dashboard = () => {
 
   const { data: recentBills } = useQuery({
     queryKey: ["recent-bills"],
-    queryFn: () => billsService.getRecent(5),
+    queryFn: () => billsService.getRecent(3), // ← Changed from 5 to 3
   });
 
   const { data: recentPayments } = useQuery({
     queryKey: ["recent-payments"],
-    queryFn: () => paymentsService.getRecent(5),
+    queryFn: () => paymentsService.getRecent(3), // ← Changed from 5 to 3
   });
 
   // FIX APPLIED IN reports.service.ts: This call now defaults to a valid date range.
-  const { data: monthlyData } = useQuery({
-    queryKey: ["monthly-report"],
-    queryFn: () => reportsService.getMonthly(),
+  // CUSTOMER BILLING: Get monthly billing data (bills & payments)
+  const { data: monthlyBillingData } = useQuery({
+    queryKey: ["monthly-billing-report"],
+    queryFn: () => reportsService.getMonthlyBilling(),
   });
 
   // UPDATED: Now using billing payment methods (from payments table)
@@ -202,10 +203,8 @@ export const Dashboard = () => {
 
   // Prepare chart data for Customer Billing Module
   const monthlyChartData =
-    monthlyData?.map((item: any) => ({
+    monthlyBillingData?.map((item: any) => ({
       month: item.month.substring(5), // Get MM from YYYY-MM
-      totalSales: item.totalSales || 0,
-      totalCollected: item.totalCollected || 0,
       billsAmount: item.billsAmount || 0,
       paymentsAmount: item.paymentsAmount || 0,
     })) || [];

@@ -357,6 +357,77 @@ export class ReportsService {
     return Object.values(monthlySummary);
   }
 
+  /**
+   * Get monthly billing report (Bills & Payments, not Daily Sales)
+   * This is specifically for the Customer Billing module
+   */
+  async getMonthlyBillingReport(dateRangeDto?: DateRangeDto): Promise<any> {
+    let startDate: Date;
+    let endDate: Date;
+
+    if (dateRangeDto?.startDate && dateRangeDto?.endDate) {
+      startDate = new Date(dateRangeDto.startDate);
+      endDate = new Date(dateRangeDto.endDate);
+    } else {
+      // Default to last 6 months
+      endDate = new Date();
+      startDate = subDays(endDate, 180);
+    }
+
+    // Get all bills in date range
+    const bills = await this.billRepository.find({
+      where: {
+        transactionDate: Between(startDate, endDate),
+      },
+      order: { transactionDate: 'ASC' },
+    });
+
+    // Get all payments in date range
+    const payments = await this.paymentRepository.find({
+      where: {
+        paymentDate: Between(startDate, endDate),
+      },
+      order: { paymentDate: 'ASC' },
+    });
+
+    // Aggregate by month
+    const monthlySummary: Record<string, any> = {};
+
+    // Process bills
+    bills.forEach((bill) => {
+      const monthYear = format(bill.transactionDate, 'yyyy-MM');
+      if (!monthlySummary[monthYear]) {
+        monthlySummary[monthYear] = {
+          month: monthYear,
+          billsAmount: 0,
+          paymentsAmount: 0,
+        };
+      }
+      monthlySummary[monthYear].billsAmount += parseFloat(
+        bill.amount?.toString() || '0',
+      );
+    });
+
+    // Process payments
+    payments.forEach((payment) => {
+      const monthYear = format(payment.paymentDate, 'yyyy-MM');
+      if (!monthlySummary[monthYear]) {
+        monthlySummary[monthYear] = {
+          month: monthYear,
+          billsAmount: 0,
+          paymentsAmount: 0,
+        };
+      }
+      monthlySummary[monthYear].paymentsAmount += parseFloat(
+        payment.amount?.toString() || '0',
+      );
+    });
+
+    return Object.values(monthlySummary).sort((a: any, b: any) =>
+      a.month.localeCompare(b.month),
+    );
+  }
+
   async getOutstandingBalances(): Promise<OutstandingBalance[]> {
     const customers = await this.customerRepository.find({
       where: { status: CustomerStatus.APPROVED },
@@ -420,6 +491,89 @@ export class ReportsService {
       .slice(0, limit);
 
     return topCustomers;
+  }
+
+  /**
+   * Get top billers (customers with highest total bills)
+   */
+  async getTopBillers(limit = 5): Promise<any[]> {
+    const customers = await this.customerRepository.find({
+      relations: ['bills'],
+      take: 100,
+    });
+
+    const topBillers = customers
+      .map((customer) => {
+        const totalBilled =
+          customer.bills?.reduce(
+            (sum, bill) => sum + parseFloat(bill.amount?.toString() || '0'),
+            0,
+          ) || 0;
+        const billCount = customer.bills?.length || 0;
+        return {
+          id: customer.id,
+          name: `${customer.firstName} ${customer.lastName}`,
+          email: customer.email,
+          phone: customer.phone,
+          totalBilled,
+          billCount,
+        };
+      })
+      .filter((c) => c.totalBilled > 0)
+      .sort((a, b) => b.totalBilled - a.totalBilled)
+      .slice(0, limit);
+
+    return topBillers;
+  }
+
+  /**
+   * Get top payers (customers with highest total payments)
+   * This is the same as getTopCustomers but with more details
+   */
+  async getTopPayers(limit = 5): Promise<any[]> {
+    const customers = await this.customerRepository.find({
+      relations: ['payments', 'bills'],
+      take: 100,
+    });
+
+    const topPayers = customers
+      .map((customer) => {
+        const totalPaid =
+          customer.payments?.reduce(
+            (sum, payment) =>
+              sum + parseFloat(payment.amount?.toString() || '0'),
+            0,
+          ) || 0;
+        const totalBilled =
+          customer.bills?.reduce(
+            (sum, bill) => sum + parseFloat(bill.amount?.toString() || '0'),
+            0,
+          ) || 0;
+        const paymentCount = customer.payments?.length || 0;
+        const balance = totalBilled - totalPaid;
+        return {
+          id: customer.id,
+          name: `${customer.firstName} ${customer.lastName}`,
+          email: customer.email,
+          phone: customer.phone,
+          totalPaid,
+          paymentCount,
+          balance,
+        };
+      })
+      .filter((c) => c.totalPaid > 0)
+      .sort((a, b) => b.totalPaid - a.totalPaid)
+      .slice(0, limit);
+
+    return topPayers;
+  }
+
+  /**
+   * Get customers with overdue/outstanding balances (for alerts)
+   */
+  async getCustomersWithOverdueBalances(limit = 5): Promise<any[]> {
+    const outstandingBalances = await this.getOutstandingBalances();
+    return outstandingBalances.slice(0, limit);
   }
 
   async getProductPerformance(

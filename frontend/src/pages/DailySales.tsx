@@ -706,7 +706,7 @@ export const DailySales = () => {
                   return;
                 }
 
-                // ✅ FIX #4: Proper bottle conversion implementation
+                // Proper bottle conversion implementation
                 if (!existingDailySales) {
                   toast.error(
                     "Please save the daily sales draft before converting bottles"
