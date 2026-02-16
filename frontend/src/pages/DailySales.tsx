@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dailySalesService } from "../services/daily-sales.service";
 import { productsService } from "../services/products.service";
@@ -47,6 +47,9 @@ export const DailySales = () => {
   // Modal States
   const [showBottleSelection, setShowBottleSelection] = useState(false);
   const [selectedBottle, setSelectedBottle] = useState<Product | null>(null);
+
+  // Track if we've initialized the form for the current record
+  const initializedRecordId = useRef<string | null>(null);
 
   // Fetch product categories
   const { data: categories } = useQuery({
@@ -162,8 +165,15 @@ export const DailySales = () => {
   };
 
   // Initialize form when daily sales record is fetched
+  // CRITICAL: Only initialize once per record to prevent wiping unsaved changes
   useEffect(() => {
-    if (existingDailySales) {
+    if (
+      existingDailySales &&
+      initializedRecordId.current !== existingDailySales.id
+    ) {
+      // Mark this record as initialized
+      initializedRecordId.current = existingDailySales.id;
+
       setInventories(
         existingDailySales.inventories.map((inv: any) => ({
           productId: inv.productId,
@@ -187,6 +197,9 @@ export const DailySales = () => {
         mpamba: Number(existingDailySales.mpamba) || 0,
         bank: Number(existingDailySales.bank) || 0,
       });
+    } else if (!existingDailySales) {
+      // Reset initialization tracking when no record exists
+      initializedRecordId.current = null;
     }
   }, [existingDailySales]);
 
