@@ -57,7 +57,7 @@ export class ReportsService {
   async getDashboardStats(): Promise<any> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     // Get yesterday's date
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -126,20 +126,32 @@ export class ReportsService {
           billsAmount > 0 ? (paymentsAmount / billsAmount) * 100 : 0,
       },
       // TODAY'S SALES - Full object with all fields Dashboard expects
-      todaySales: todaySales ? {
-        totalSales: parseFloat(todaySales.totalSales?.toString() || '0'),
-        totalExpenses: parseFloat(todaySales.totalExpenses?.toString() || '0'),
-        cashAtHand: parseFloat(todaySales.cashAtHand?.toString() || '0'),
-        netRevenue: parseFloat(todaySales.netRevenue?.toString() || '0'),
-        totalStockPurchases: parseFloat(todaySales.totalStockPurchases?.toString() || '0'),
-        status: todaySales.status || 'draft',
-        date: todaySales.date,
-      } : null,
+      todaySales: todaySales
+        ? {
+            totalSales: parseFloat(todaySales.totalSales?.toString() || '0'),
+            totalExpenses: parseFloat(
+              todaySales.totalExpenses?.toString() || '0',
+            ),
+            cashAtHand: parseFloat(todaySales.cashAtHand?.toString() || '0'),
+            netRevenue: parseFloat(todaySales.netRevenue?.toString() || '0'),
+            totalStockPurchases: parseFloat(
+              todaySales.totalStockPurchases?.toString() || '0',
+            ),
+            status: todaySales.status || 'draft',
+            date: todaySales.date,
+          }
+        : null,
       // YESTERDAY'S SALES - For comparison
-      yesterdaySales: yesterdaySales ? {
-        totalSales: parseFloat(yesterdaySales.totalSales?.toString() || '0'),
-        totalExpenses: parseFloat(yesterdaySales.totalExpenses?.toString() || '0'),
-      } : null,
+      yesterdaySales: yesterdaySales
+        ? {
+            totalSales: parseFloat(
+              yesterdaySales.totalSales?.toString() || '0',
+            ),
+            totalExpenses: parseFloat(
+              yesterdaySales.totalExpenses?.toString() || '0',
+            ),
+          }
+        : null,
       todayTotalSales: todaySales
         ? parseFloat(todaySales.totalSales?.toString() || '0')
         : 0,
@@ -374,7 +386,7 @@ export class ReportsService {
       startDate = subDays(endDate, 180);
     }
 
-    // Get all bills in date range
+    // Get all bills in date range (using transactionDate)
     const bills = await this.billRepository.find({
       where: {
         transactionDate: Between(startDate, endDate),
@@ -382,12 +394,12 @@ export class ReportsService {
       order: { transactionDate: 'ASC' },
     });
 
-    // Get all payments in date range
+    // Get all payments in date range (using createdAt - Payment entity doesn't have paymentDate field)
     const payments = await this.paymentRepository.find({
       where: {
-        paymentDate: Between(startDate, endDate),
+        createdAt: Between(startDate, endDate),
       },
-      order: { paymentDate: 'ASC' },
+      order: { createdAt: 'ASC' },
     });
 
     // Aggregate by month
@@ -408,9 +420,9 @@ export class ReportsService {
       );
     });
 
-    // Process payments
+    // Process payments (using createdAt field)
     payments.forEach((payment) => {
-      const monthYear = format(payment.paymentDate, 'yyyy-MM');
+      const monthYear = format(payment.createdAt, 'yyyy-MM');
       if (!monthlySummary[monthYear]) {
         monthlySummary[monthYear] = {
           month: monthYear,
@@ -699,9 +711,9 @@ export class ReportsService {
     // AFTER (with transaction_date column) - direct query
     const expenses = await this.dailyExpenseRepository
       .createQueryBuilder('de')
-      .where('de.transaction_date BETWEEN :start AND :end', { 
-        start: finalStartDate, 
-        end: finalEndDate 
+      .where('de.transaction_date BETWEEN :start AND :end', {
+        start: finalStartDate,
+        end: finalEndDate,
       })
       .getMany();
 
@@ -969,12 +981,15 @@ export class ReportsService {
     // Build map of stock purchases by daily_sales_id for backward compatibility
     const stockByDailySalesId = new Map<string, number>();
     const stockByDate = new Map<string, number>(); // For grouping by date
-    
+
     stockPurchases.forEach((sp) => {
       const dateKey = format(sp.transactionDate, 'yyyy-MM-dd');
       const currentStock = stockByDate.get(dateKey) || 0;
-      stockByDate.set(dateKey, currentStock + (parseFloat((sp.totalCost || 0).toString()) || 0));
-      
+      stockByDate.set(
+        dateKey,
+        currentStock + (parseFloat((sp.totalCost || 0).toString()) || 0),
+      );
+
       // Also maintain backward compatibility with daily_sales_id mapping
       if (sp.dailySalesId) {
         const current = stockByDailySalesId.get(sp.dailySalesId) || 0;
