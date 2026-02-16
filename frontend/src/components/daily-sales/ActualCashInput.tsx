@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 
 interface ActualCashInputProps {
   dailySalesId: string;
-  currentCashAtHand: number; // Expected cash from system (should equal cashAtHand)
+  currentCashAtHand: number; // Expected cash = Total Sales - Expenses - Digital Payments - Bills
   currentActualCash?: number | null; // Actual cash already entered (if any)
   isDisabled?: boolean;
   onSuccess?: () => void;
@@ -69,7 +69,7 @@ export const ActualCashInput = ({
     <Card title="Actual Cash Collected (Manager Only)">
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* ✅ FIX: Expected Cash = Cash at Hand (not a separate calculation) */}
+          {/* Expected Cash = Cash at Hand (includes bills deduction) */}
           <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Expected Cash (System)
@@ -78,7 +78,7 @@ export const ActualCashInput = ({
               MK {currentCashAtHand.toLocaleString()}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-              This should equal Cash at Hand
+              Total Sales - Expenses - Digital - Bills
             </p>
           </div>
 

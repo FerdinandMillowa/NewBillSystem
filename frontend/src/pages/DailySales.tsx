@@ -55,7 +55,11 @@ export const DailySales = () => {
   });
 
   // Fetch existing daily sales (NO auto-create)
-  const { data: existingDailySales, isLoading: isSalesLoading } = useQuery({
+  const {
+    data: existingDailySales,
+    isLoading: isSalesLoading,
+    refetch: refetchDailySales,
+  } = useQuery({
     queryKey: ["daily-sales-by-date", selectedDate],
     queryFn: async () => {
       try {
@@ -323,7 +327,7 @@ export const DailySales = () => {
       });
     },
     onSuccess: () => {
-      refetchSales();
+      refetchDailySales();
       toast.success(
         nearestPreviousRecord
           ? `Record created using ${format(
@@ -510,7 +514,7 @@ export const DailySales = () => {
           billsForDate={existingDailySales.bills || []}
           billsAmount={billsAmount}
           isDisabled={isFinalized}
-          onBillCreated={() => refetchSales()}
+          onBillCreated={() => {}}
           existingDailySales={existingDailySales}
         />
       )}
@@ -555,7 +559,7 @@ export const DailySales = () => {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => refetchSales()}
+                  onClick={() => refetchDailySales()}
                 >
                   <ArrowPathIcon className="w-4 h-4 mr-1.5" />
                   Refresh
@@ -660,7 +664,7 @@ export const DailySales = () => {
           {isFinalized && isAdmin && existingDailySales && (
             <ActualCashInput
               dailySalesId={existingDailySales.id}
-              currentCashAtHand={existingDailySales.cashAtHand || 0}
+              currentCashAtHand={calculateCashAtHand()}
               currentActualCash={existingDailySales.actualCashCollected}
             />
           )}
