@@ -151,14 +151,14 @@ export const CreateBillModal = ({ isOpen, onClose }: CreateBillModalProps) => {
                       </p>
                     )}
                   </div>
-                  {/* Transaction Date */}
+
+                  {/* Transaction Date - REMOVED helpText prop */}
                   <Input
                     label="Transaction Date (Optional)"
                     type="date"
                     error={errors.transactionDate?.message}
                     {...register("transactionDate")}
                     max={new Date().toISOString().split("T")[0]}
-                    helpText="Leave empty if bill was incurred today"
                   />
 
                   {/* Info Box */}

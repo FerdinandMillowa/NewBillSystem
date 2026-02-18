@@ -22,23 +22,52 @@ import {
 } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 
+// ✅ ADDED: Proper type definitions
+interface BaseNavItem {
+  name: string;
+  icon: React.ForwardRefExoticComponent<
+    React.PropsWithoutRef<React.SVGProps<SVGSVGElement>> & {
+      title?: string;
+      titleId?: string;
+    } & React.RefAttributes<SVGSVGElement>
+  >;
+  type?: "link" | "group";
+}
+
+interface LinkNavItem extends BaseNavItem {
+  type: "link";
+  href: string;
+}
+
+interface GroupNavItem extends BaseNavItem {
+  type: "group";
+  items: LinkNavItem[];
+}
+
+type NavItem = LinkNavItem | GroupNavItem;
+
 // Navigation structure for regular users (flat)
-const userNavigation = [
+const userNavigation: LinkNavItem[] = [
   {
     name: "Quick Actions",
     href: "/quick-actions",
     icon: SparklesIcon,
-    description: "Fast access to daily tasks",
+    type: "link",
   },
-  { name: "Dashboard", href: "/dashboard", icon: HomeIcon },
-  { name: "Customers", href: "/customers", icon: UsersIcon },
-  { name: "Bills", href: "/bills", icon: DocumentTextIcon },
-  { name: "Payments", href: "/payments", icon: CreditCardIcon },
-  { name: "Daily Sales", href: "/daily-sales", icon: DocumentChartBarIcon },
+  { name: "Dashboard", href: "/dashboard", icon: HomeIcon, type: "link" },
+  { name: "Customers", href: "/customers", icon: UsersIcon, type: "link" },
+  { name: "Bills", href: "/bills", icon: DocumentTextIcon, type: "link" },
+  { name: "Payments", href: "/payments", icon: CreditCardIcon, type: "link" },
+  {
+    name: "Daily Sales",
+    href: "/daily-sales",
+    icon: DocumentChartBarIcon,
+    type: "link",
+  },
 ];
 
 // Navigation structure for admins (grouped)
-const adminNavigation = [
+const adminNavigation: NavItem[] = [
   {
     name: "Quick Actions",
     href: "/quick-actions",
@@ -56,9 +85,14 @@ const adminNavigation = [
     icon: BanknotesIcon,
     type: "group",
     items: [
-      { name: "Customers", href: "/customers", icon: UsersIcon },
-      { name: "Bills", href: "/bills", icon: DocumentTextIcon },
-      { name: "Payments", href: "/payments", icon: CreditCardIcon },
+      { name: "Customers", href: "/customers", icon: UsersIcon, type: "link" },
+      { name: "Bills", href: "/bills", icon: DocumentTextIcon, type: "link" },
+      {
+        name: "Payments",
+        href: "/payments",
+        icon: CreditCardIcon,
+        type: "link",
+      },
     ],
   },
   {
@@ -66,8 +100,13 @@ const adminNavigation = [
     icon: BuildingStorefrontIcon,
     type: "group",
     items: [
-      { name: "Products", href: "/products", icon: CubeIcon },
-      { name: "Daily Sales", href: "/daily-sales", icon: DocumentChartBarIcon },
+      { name: "Products", href: "/products", icon: CubeIcon, type: "link" },
+      {
+        name: "Daily Sales",
+        href: "/daily-sales",
+        icon: DocumentChartBarIcon,
+        type: "link",
+      },
     ],
   },
   {
@@ -177,7 +216,7 @@ export const Sidebar = ({
               return (
                 <NavLink
                   key={item.name}
-                  to={item.href!}
+                  to={(item as LinkNavItem).href}
                   onClick={isMobile ? onClose : undefined}
                   className={({ isActive }) =>
                     clsx(
@@ -202,12 +241,14 @@ export const Sidebar = ({
 
             // Grouped dropdown item (only for admins)
             if (item.type === "group" && isAdmin) {
+              const groupItem = item as GroupNavItem;
+
               // Don't show grouped items when sidebar is collapsed
               if (!isDesktopOpen && !isMobile) {
                 // In collapsed mode, show group items as individual flat links
                 return (
                   <Fragment key={item.name}>
-                    {item.items?.map((subItem) => (
+                    {groupItem.items?.map((subItem) => (
                       <NavLink
                         key={subItem.name}
                         to={subItem.href}
@@ -257,7 +298,7 @@ export const Sidebar = ({
                         />
                       </Disclosure.Button>
                       <Disclosure.Panel className="mt-1 space-y-1">
-                        {item.items?.map((subItem) => (
+                        {groupItem.items?.map((subItem) => (
                           <NavLink
                             key={subItem.name}
                             to={subItem.href}
