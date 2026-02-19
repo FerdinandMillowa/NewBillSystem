@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { NavLink } from "react-router-dom";
 import { Dialog, Transition, Disclosure } from "@headlessui/react";
 import { useAuth } from "../../context/AuthContext";
@@ -142,6 +142,205 @@ interface SidebarProps {
   onDesktopToggle: () => void;
 }
 
+// ✅ CORRECT - Define component OUTSIDE main component
+interface SidebarContentProps {
+  isMobile?: boolean;
+  navigation: NavItem[];
+  isDesktopOpen: boolean;
+  onClose: () => void;
+  onDesktopToggle: () => void;
+  isAdmin: boolean;
+}
+
+const SidebarContent = ({
+  isMobile = false,
+  navigation,
+  isDesktopOpen,
+  onClose,
+  onDesktopToggle,
+  isAdmin,
+}: SidebarContentProps) => (
+  <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-grow pt-5 pb-4 overflow-y-auto">
+      {/* Logo and Toggle */}
+      <div className="flex items-center justify-between flex-shrink-0 px-4 mb-6">
+        <div className="flex items-center">
+          <div className="flex items-center justify-center w-10 h-10 bg-primary-600 rounded-lg">
+            <img
+              src="/logo.png"
+              alt="Pitch and Roll Logo"
+              className="w-6 h-6 object-contain"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+                const parent = e.currentTarget.parentElement;
+                if (parent) {
+                  parent.innerHTML = `
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  `;
+                }
+              }}
+            />
+          </div>
+          {(isDesktopOpen || isMobile) && (
+            <span className="ml-3 text-xl font-bold text-gray-900 dark:text-white">
+              Pitch&Roll
+            </span>
+          )}
+        </div>
+
+        {/* Desktop Toggle Button */}
+        {!isMobile && (
+          <button
+            onClick={onDesktopToggle}
+            className="hidden lg:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            {isDesktopOpen ? (
+              <ChevronLeftIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            ) : (
+              <ChevronRightIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            )}
+          </button>
+        )}
+
+        {/* Close button for mobile */}
+        {isMobile && (
+          <button
+            onClick={onClose}
+            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <XMarkIcon className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+          </button>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-2 space-y-1">
+        {navigation.map((item) => {
+          // Regular link item
+          if (item.type === "link") {
+            return (
+              <NavLink
+                key={item.name}
+                to={(item as LinkNavItem).href}
+                onClick={isMobile ? onClose : undefined}
+                className={({ isActive }) =>
+                  clsx(
+                    "group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                    isActive
+                      ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+                  )
+                }
+              >
+                <item.icon
+                  className={clsx(
+                    "h-5 w-5 flex-shrink-0",
+                    isDesktopOpen || isMobile ? "mr-3" : "mx-auto"
+                  )}
+                  aria-hidden="true"
+                />
+                {(isDesktopOpen || isMobile) && item.name}
+              </NavLink>
+            );
+          }
+
+          // Grouped dropdown item (only for admins)
+          if (item.type === "group" && isAdmin) {
+            const groupItem = item as GroupNavItem;
+
+            // Don't show grouped items when sidebar is collapsed
+            if (!isDesktopOpen && !isMobile) {
+              // In collapsed mode, show group items as individual flat links
+              return (
+                <Fragment key={item.name}>
+                  {groupItem.items?.map((subItem) => (
+                    <NavLink
+                      key={subItem.name}
+                      to={subItem.href}
+                      onClick={isMobile ? onClose : undefined}
+                      className={({ isActive }) =>
+                        clsx(
+                          "group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                          isActive
+                            ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+                        )
+                      }
+                      title={subItem.name}
+                    >
+                      <subItem.icon
+                        className="h-5 w-5 flex-shrink-0 mx-auto"
+                        aria-hidden="true"
+                      />
+                    </NavLink>
+                  ))}
+                </Fragment>
+              );
+            }
+
+            return (
+              <Disclosure key={item.name} as="div" defaultOpen>
+                {({ open }) => (
+                  <>
+                    <Disclosure.Button
+                      className={clsx(
+                        "w-full group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                        "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+                      )}
+                    >
+                      <div className="flex items-center">
+                        <item.icon
+                          className="h-5 w-5 flex-shrink-0 mr-3"
+                          aria-hidden="true"
+                        />
+                        <span>{item.name}</span>
+                      </div>
+                      <ChevronDownIcon
+                        className={clsx(
+                          "h-4 w-4 transition-transform",
+                          open ? "transform rotate-180" : ""
+                        )}
+                      />
+                    </Disclosure.Button>
+                    <Disclosure.Panel className="mt-1 space-y-1">
+                      {groupItem.items?.map((subItem) => (
+                        <NavLink
+                          key={subItem.name}
+                          to={subItem.href}
+                          onClick={isMobile ? onClose : undefined}
+                          className={({ isActive }) =>
+                            clsx(
+                              "group flex items-center pl-11 pr-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                              isActive
+                                ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
+                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+                            )
+                          }
+                        >
+                          <subItem.icon
+                            className="h-4 w-4 flex-shrink-0 mr-3"
+                            aria-hidden="true"
+                          />
+                          {subItem.name}
+                        </NavLink>
+                      ))}
+                    </Disclosure.Panel>
+                  </>
+                )}
+              </Disclosure>
+            );
+          }
+
+          return null;
+        })}
+      </nav>
+    </div>
+  </div>
+);
+
+// Main Sidebar component
 export const Sidebar = ({
   isOpen,
   isDesktopOpen,
@@ -150,188 +349,6 @@ export const Sidebar = ({
 }: SidebarProps) => {
   const { isAdmin } = useAuth();
   const navigation = isAdmin ? adminNavigation : userNavigation;
-
-  // Sidebar Content Component
-  const SidebarContent = ({ isMobile = false }) => (
-    <div className="flex flex-col h-full">
-      <div className="flex flex-col flex-grow pt-5 pb-4 overflow-y-auto">
-        {/* Logo and Toggle */}
-        <div className="flex items-center justify-between flex-shrink-0 px-4 mb-6">
-          <div className="flex items-center">
-            <div className="flex items-center justify-center w-10 h-10 bg-primary-600 rounded-lg">
-              <img
-                src="/logo.png"
-                alt="Pitch and Roll Logo"
-                className="w-6 h-6 object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                  const parent = e.currentTarget.parentElement;
-                  if (parent) {
-                    parent.innerHTML = `
-                      <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    `;
-                  }
-                }}
-              />
-            </div>
-            {(isDesktopOpen || isMobile) && (
-              <span className="ml-3 text-xl font-bold text-gray-900 dark:text-white">
-                Pitch&Roll
-              </span>
-            )}
-          </div>
-
-          {/* Desktop Toggle Button */}
-          {!isMobile && (
-            <button
-              onClick={onDesktopToggle}
-              className="hidden lg:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            >
-              {isDesktopOpen ? (
-                <ChevronLeftIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              ) : (
-                <ChevronRightIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              )}
-            </button>
-          )}
-
-          {/* Close button for mobile */}
-          {isMobile && (
-            <button
-              onClick={onClose}
-              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            >
-              <XMarkIcon className="w-6 h-6 text-gray-600 dark:text-gray-400" />
-            </button>
-          )}
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 px-2 space-y-1">
-          {navigation.map((item) => {
-            // Regular link item
-            if (item.type === "link") {
-              return (
-                <NavLink
-                  key={item.name}
-                  to={(item as LinkNavItem).href}
-                  onClick={isMobile ? onClose : undefined}
-                  className={({ isActive }) =>
-                    clsx(
-                      "group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors",
-                      isActive
-                        ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
-                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
-                    )
-                  }
-                >
-                  <item.icon
-                    className={clsx(
-                      "h-5 w-5 flex-shrink-0",
-                      isDesktopOpen || isMobile ? "mr-3" : "mx-auto"
-                    )}
-                    aria-hidden="true"
-                  />
-                  {(isDesktopOpen || isMobile) && item.name}
-                </NavLink>
-              );
-            }
-
-            // Grouped dropdown item (only for admins)
-            if (item.type === "group" && isAdmin) {
-              const groupItem = item as GroupNavItem;
-
-              // Don't show grouped items when sidebar is collapsed
-              if (!isDesktopOpen && !isMobile) {
-                // In collapsed mode, show group items as individual flat links
-                return (
-                  <Fragment key={item.name}>
-                    {groupItem.items?.map((subItem) => (
-                      <NavLink
-                        key={subItem.name}
-                        to={subItem.href}
-                        onClick={isMobile ? onClose : undefined}
-                        className={({ isActive }) =>
-                          clsx(
-                            "group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors",
-                            isActive
-                              ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
-                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
-                          )
-                        }
-                        title={subItem.name}
-                      >
-                        <subItem.icon
-                          className="h-5 w-5 flex-shrink-0 mx-auto"
-                          aria-hidden="true"
-                        />
-                      </NavLink>
-                    ))}
-                  </Fragment>
-                );
-              }
-
-              return (
-                <Disclosure key={item.name} as="div" defaultOpen>
-                  {({ open }) => (
-                    <>
-                      <Disclosure.Button
-                        className={clsx(
-                          "w-full group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors",
-                          "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
-                        )}
-                      >
-                        <div className="flex items-center">
-                          <item.icon
-                            className="h-5 w-5 flex-shrink-0 mr-3"
-                            aria-hidden="true"
-                          />
-                          <span>{item.name}</span>
-                        </div>
-                        <ChevronDownIcon
-                          className={clsx(
-                            "h-4 w-4 transition-transform",
-                            open ? "transform rotate-180" : ""
-                          )}
-                        />
-                      </Disclosure.Button>
-                      <Disclosure.Panel className="mt-1 space-y-1">
-                        {groupItem.items?.map((subItem) => (
-                          <NavLink
-                            key={subItem.name}
-                            to={subItem.href}
-                            onClick={isMobile ? onClose : undefined}
-                            className={({ isActive }) =>
-                              clsx(
-                                "group flex items-center pl-11 pr-3 py-2 text-sm font-medium rounded-lg transition-colors",
-                                isActive
-                                  ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400"
-                                  : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
-                              )
-                            }
-                          >
-                            <subItem.icon
-                              className="h-4 w-4 flex-shrink-0 mr-3"
-                              aria-hidden="true"
-                            />
-                            {subItem.name}
-                          </NavLink>
-                        ))}
-                      </Disclosure.Panel>
-                    </>
-                  )}
-                </Disclosure>
-              );
-            }
-
-            return null;
-          })}
-        </nav>
-      </div>
-    </div>
-  );
 
   return (
     <>
@@ -343,7 +360,13 @@ export const Sidebar = ({
         )}
       >
         <div className="flex flex-col w-full bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
-          <SidebarContent />
+          <SidebarContent
+            navigation={navigation}
+            isDesktopOpen={isDesktopOpen}
+            onClose={onClose}
+            onDesktopToggle={onDesktopToggle}
+            isAdmin={isAdmin}
+          />
         </div>
       </div>
 
@@ -377,7 +400,14 @@ export const Sidebar = ({
                 >
                   <Dialog.Panel className="pointer-events-auto w-screen max-w-xs">
                     <div className="flex h-full flex-col bg-white dark:bg-gray-800 shadow-xl">
-                      <SidebarContent isMobile={true} />
+                      <SidebarContent
+                        isMobile={true}
+                        navigation={navigation}
+                        isDesktopOpen={isDesktopOpen}
+                        onClose={onClose}
+                        onDesktopToggle={onDesktopToggle}
+                        isAdmin={isAdmin}
+                      />
                     </div>
                   </Dialog.Panel>
                 </Transition.Child>
