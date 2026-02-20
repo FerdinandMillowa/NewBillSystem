@@ -104,7 +104,7 @@ export const BottleConversionModal = ({
       isOpen={isOpen}
       onClose={onClose}
       title="Convert Bottles to Shots"
-      icon={<ArrowPathIcon className="w-6 h-6 text-purple-600" />}
+      // icon prop removed - Modal doesn't accept it
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Bottle Info */}
