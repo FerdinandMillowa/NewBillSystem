@@ -76,7 +76,9 @@ export const Login = () => {
                 }}
               />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">Bar Management</h1>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Pitch & Roll Bar Management
+            </h1>
             <p className="text-gray-600 mt-2">Sign in to your account</p>
           </div>
 
@@ -140,7 +142,7 @@ export const Login = () => {
             </Button>
           </form>
 
-          {/* Demo Credentials */}
+          {/* Demo Credentials
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600 text-center">
               <strong>Demo Credentials:</strong>
@@ -149,7 +151,7 @@ export const Login = () => {
               <br />
               Password: <code className="text-primary-600">Admin123!</code>
             </p>
-          </div>
+          </div> */}
         </div>
 
         {/* Footer */}
