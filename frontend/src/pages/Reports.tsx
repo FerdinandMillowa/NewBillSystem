@@ -333,7 +333,7 @@ export const Reports = () => {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={(entry) =>
+                  label={(entry: any) =>
                     `${entry.name}: ${entry.percentage?.toFixed(1) || 0}%`
                   }
                   outerRadius={100}
@@ -707,8 +707,8 @@ export const Reports = () => {
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={(entry) =>
-                  `${entry.categoryName}: ${entry.percentage.toFixed(1)}%`
+                label={(entry: any) =>
+                  `${entry.categoryName}: ${entry.percentage?.toFixed(1) || 0}%`
                 }
                 outerRadius={100}
                 fill="#8884d8"

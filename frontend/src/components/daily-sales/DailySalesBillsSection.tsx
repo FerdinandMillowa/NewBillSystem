@@ -119,24 +119,24 @@ export const DailySalesBillsSection = ({
   };
 
   return (
-    <Card
-      title={
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <DocumentTextIcon className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" />
-            <span>Bills for {selectedDate}</span>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-600 dark:text-gray-400">
-              Total Bills
-            </p>
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              {formatCurrency(billsAmount)}
-            </p>
-          </div>
+    <Card>
+      {/* Bills Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center">
+          <DocumentTextIcon className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" />
+          <span className="font-semibold text-gray-900 dark:text-white">
+            Bills for {selectedDate}
+          </span>
         </div>
-      }
-    >
+        <div className="text-right">
+          <p className="text-xs text-gray-600 dark:text-gray-400">
+            Total Bills
+          </p>
+          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+            {formatCurrency(billsAmount)}
+          </p>
+        </div>
+      </div>
       {/* ✅ FIXED: Existing Bills List with proper null safety */}
       {billsForDate && billsForDate.length > 0 ? (
         <div className="space-y-2 mb-4">

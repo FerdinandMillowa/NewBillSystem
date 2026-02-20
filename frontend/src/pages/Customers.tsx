@@ -306,7 +306,7 @@ export const Customers = () => {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {statCards.map((stat) => (
-          <Card
+          <div
             key={stat.name}
             onClick={() => stat.clickable && handleStatCardClick(stat.name)}
             className={
@@ -315,16 +315,20 @@ export const Customers = () => {
                 : ""
             }
           >
-            <div className="flex items-center">
-              <div className={`p-3 rounded-lg ${stat.color}`}>
-                <stat.icon className="w-6 h-6 text-white" />
+            <Card>
+              <div className="flex items-center">
+                <div className={`p-3 rounded-lg ${stat.color}`}>
+                  <stat.icon className="w-6 h-6 text-white" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm text-gray-600">{stat.name}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {stat.value}
+                  </p>
+                </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm text-gray-600">{stat.name}</p>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
         ))}
       </div>
 

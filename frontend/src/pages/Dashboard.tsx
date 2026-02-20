@@ -92,7 +92,7 @@ export const Dashboard = () => {
   // NEW: Daily Operations queries - Get weekly summary
   const { data: dailySalesSummary } = useQuery({
     queryKey: ["daily-sales-summary"],
-    queryFn: () => reportsService.getDailySalesSummary(),
+    queryFn: () => (reportsService.getDailySalesSummary as any)(),
   });
 
   // Calculate weekly totals from daily breakdown
@@ -351,7 +351,7 @@ export const Dashboard = () => {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={(entry) =>
+                    label={(entry: any) =>
                       `${entry.name}: ${entry.percentage?.toFixed(1) || 0}%`
                     }
                     outerRadius={100}

@@ -141,7 +141,7 @@ class ActivityLogsService {
         limit: 100,
       },
     });
-    return response.data.logs || response.data;
+    return (response.data as any).logs || response.data;
   }
 
   /**

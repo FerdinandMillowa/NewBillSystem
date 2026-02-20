@@ -33,7 +33,7 @@ export const ProfileSection = ({ profile }: ProfileSectionProps) => {
     reset,
     formState: { errors, isDirty },
   } = useForm<UpdateProfileRequest>({
-    resolver: zodResolver(profileSchema),
+    resolver: zodResolver(profileSchema) as any,
     defaultValues: {
       username: profile.username,
       email: profile.email,
