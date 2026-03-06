@@ -95,6 +95,7 @@ export const EditProductModal = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["product-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["products-for-daily-sales"] }); // ✅ FIX: Keep DailySales cache fresh
       toast.success("Product updated successfully!");
       onClose();
     },

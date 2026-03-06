@@ -102,8 +102,9 @@ export const DailySales = () => {
 
   // Fetch active products for initialization
   const { data: productsData } = useQuery({
-    queryKey: ["products-for-daily-sales"],
+    queryKey: ["products", undefined, undefined], // ✅ Matches the key invalidated by EditProductModal
     queryFn: () => productsService.getAll({ isActive: true, limit: 100 }),
+    staleTime: 0, // ✅ Always re-fetch fresh data when navigating to this page
   });
 
   // Calculate billsAmount from actual bills array
@@ -240,6 +241,7 @@ export const DailySales = () => {
     setStockPurchases(purchases);
   };
 
+  // AFTER
   const transferMutation = useMutation({
     mutationFn: async (data: {
       fromProductId: string;
@@ -256,6 +258,11 @@ export const DailySales = () => {
       );
     },
     onSuccess: () => {
+      // ✅ FIX: Force re-initialization by resetting the guard BEFORE invalidating.
+      // The useEffect guard compares record ID — resetting it allows the effect
+      // to re-run and reload inventories from the freshly fetched record.
+      initializedRecordId.current = null;
+
       queryClient.invalidateQueries({ queryKey: ["daily-sales-by-date"] });
       queryClient.invalidateQueries({ queryKey: ["products-for-daily-sales"] });
       toast.success("Bottle converted successfully!");

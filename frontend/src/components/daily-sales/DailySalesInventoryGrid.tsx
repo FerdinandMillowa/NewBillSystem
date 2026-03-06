@@ -19,7 +19,6 @@ export const DailySalesInventoryGrid = ({
   onInventoriesChange,
   isDisabled = false,
 }: DailySalesInventoryGridProps) => {
-  // Null checks for products and categories
   if (!products || products.length === 0) {
     return (
       <Card title="Product Inventory & Sales">
@@ -98,8 +97,12 @@ export const DailySalesInventoryGrid = ({
     );
   };
 
+  // ✅ FIX: Exclude convertedOut from sold quantity so converted bottles
+  // don't generate revenue in the grid display.
   const calculateSoldQuantity = (inv: DailyInventoryItem): number => {
-    return inv.openingStock + inv.stockIn - inv.closingStock;
+    const rawSold = inv.openingStock + inv.stockIn - inv.closingStock;
+    const converted = inv.convertedOut || 0;
+    return Math.max(0, rawSold - converted);
   };
 
   const calculateRevenue = (
@@ -147,6 +150,9 @@ export const DailySalesInventoryGrid = ({
                 Total
               </th>
               <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                Converted
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
                 Sold
               </th>
               <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
@@ -175,7 +181,7 @@ export const DailySalesInventoryGrid = ({
                       onClick={() => toggleCategory(category.id)}
                     >
                       <td
-                        colSpan={8}
+                        colSpan={9}
                         className="px-4 py-3 text-sm font-bold text-primary-900"
                       >
                         <div className="flex items-center justify-between">
@@ -192,12 +198,13 @@ export const DailySalesInventoryGrid = ({
                         const inv = getInventoryForProduct(product.id);
                         const soldQuantity = calculateSoldQuantity(inv);
                         const revenue = calculateRevenue(product, inv);
+                        const convertedOut = inv.convertedOut || 0;
                         return (
                           <tr key={product.id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 text-sm font-medium text-gray-900">
                               {product.name}
                             </td>
-                            {/* ✅ FIXED: Opening Stock - Read-Only */}
+                            {/* Opening Stock - Read-Only */}
                             <td className="px-4 py-3 text-center">
                               <div className="w-16 p-1 bg-gray-100 border border-gray-300 rounded text-center text-gray-700 font-medium">
                                 {inv.openingStock}
@@ -220,6 +227,10 @@ export const DailySalesInventoryGrid = ({
                             </td>
                             <td className="px-4 py-3 text-center text-sm">
                               {inv.openingStock + inv.stockIn}
+                            </td>
+                            {/* ✅ FIX: Converted column — read-only, shows convertedOut */}
+                            <td className="px-4 py-3 text-center text-sm text-orange-600 font-medium">
+                              {convertedOut > 0 ? convertedOut : "—"}
                             </td>
                             <td className="px-4 py-3 text-center text-sm font-bold">
                               {soldQuantity}
