@@ -40,6 +40,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { format, subDays } from "date-fns";
+import { toast } from "react-hot-toast";
 import { useSearchParams } from "react-router-dom";
 import {
   fixedExpensesService,
