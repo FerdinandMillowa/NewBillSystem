@@ -156,7 +156,7 @@ export const Login = () => {
 
         {/* Footer */}
         <p className="text-center text-gray-600 text-sm mt-6">
-          © 2025 Bill Management System. All rights reserved.
+          © 2025 Bar Management System. All rights reserved.
         </p>
       </div>
     </div>

@@ -61,6 +61,7 @@ export const EditProductModal = ({
       size: product.size || "",
       currentPrice: product.currentPrice,
       currentStock: product.currentStock,
+      costPrice: product?.costPrice || 0,
       shotsPerBottle: product.shotsPerBottle || undefined,
       linkedShotProductId: product.linkedShotProductId || "",
       notes: product.notes || "",
@@ -82,6 +83,7 @@ export const EditProductModal = ({
       size: product.size || "",
       currentPrice: product.currentPrice,
       currentStock: product.currentStock,
+      costPrice: product?.costPrice || 0,
       shotsPerBottle: product.shotsPerBottle || undefined,
       linkedShotProductId: product.linkedShotProductId || "",
       notes: product.notes || "",
@@ -111,6 +113,7 @@ export const EditProductModal = ({
       ...data,
       currentPrice: Number(data.currentPrice),
       currentStock: Number(data.currentStock),
+      costPrice: Number(data.costPrice),
       shotsPerBottle: data.shotsPerBottle
         ? Number(data.shotsPerBottle)
         : undefined,
@@ -199,6 +202,26 @@ export const EditProductModal = ({
                       <label className="label">Size</label>
                       <Input {...register("size")} placeholder="e.g., 330ml" />
                     </div>
+                  </div>
+
+                  {/* Cost Price - Purchase Price */}
+                  <div>
+                    <label className="label">Cost Price (Purchase Price)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      {...register("costPrice", {
+                        min: {
+                          value: 0,
+                          message: "Cost price must be positive",
+                        },
+                      })}
+                      placeholder="What you pay per unit"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Used for profit margin calculations
+                    </p>
                   </div>
 
                   {/* Price and Stock */}

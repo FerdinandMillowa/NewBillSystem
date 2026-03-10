@@ -24,7 +24,7 @@ export class ReportsController {
     return this.reportsService.getPaymentMethodDistribution();
   }
 
-  // NEW ENDPOINT: Get billing payment methods (from payments table)
+  // Get billing payment methods (from payments table)
   @Get('billing/payment-methods')
   getBillingPaymentMethods(@Query() dateRangeDto: DateRangeDto) {
     return this.reportsService.getBillingPaymentMethods(dateRangeDto);
@@ -35,13 +35,13 @@ export class ReportsController {
   getMonthlyReport(@Query() dateRangeDto: DateRangeDto) {
     return this.reportsService.getMonthlyReport(dateRangeDto);
   }
-  
+
   // Get monthly billing report (for Customer Billing module)
   @Get('monthly-billing')
   getMonthlyBillingReport(@Query() dateRangeDto: DateRangeDto) {
     return this.reportsService.getMonthlyBillingReport(dateRangeDto);
   }
-  
+
   // Get weekly comparison (ANY authenticated user can view)
   @Get('weekly-comparison')
   getWeeklyComparison() {
@@ -62,13 +62,13 @@ export class ReportsController {
     return this.reportsService.getTopCustomers(limit);
   }
 
-  // Get top billers (customers with highest bills)
+  // Get top billers
   @Get('top-billers')
   getTopBillers(@Query('limit') limit?: number) {
     return this.reportsService.getTopBillers(limit);
   }
 
-  // Get top payers (customers with highest payments)
+  // Get top payers
   @Get('top-payers')
   getTopPayers(@Query('limit') limit?: number) {
     return this.reportsService.getTopPayers(limit);
@@ -80,11 +80,28 @@ export class ReportsController {
     return this.reportsService.getCustomersWithOverdueBalances(limit);
   }
 
+  // ── NEW: Profit / Loss & Business Position report ──────────────────────
+  @Get('profit-loss')
+  getProfitLossReport(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.reportsService.getProfitLossReport(startDate, endDate);
+  }
+
+  // ── NEW: Supplier Analytics ────────────────────────────────────────────
+  @Get('supplier-analytics')
+  getSupplierAnalytics(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.reportsService.getSupplierAnalytics(startDate, endDate);
+  }
+
   // ========================================
   // DAILY SALES ANALYTICS ENDPOINTS
   // ========================================
 
-  // Get daily sales summary
   @Get('daily-sales/summary')
   getDailySalesSummary(
     @Query('startDate') startDate: string,
@@ -93,7 +110,6 @@ export class ReportsController {
     return this.reportsService.getDailySalesSummary(startDate, endDate);
   }
 
-  // Get product performance
   @Get('daily-sales/product-performance')
   getProductPerformance(
     @Query('startDate') startDate: string,
@@ -102,7 +118,6 @@ export class ReportsController {
     return this.reportsService.getProductPerformance(startDate, endDate);
   }
 
-  // Get category-wise sales
   @Get('daily-sales/category-sales')
   getCategorySales(
     @Query('startDate') startDate: string,
@@ -111,7 +126,6 @@ export class ReportsController {
     return this.reportsService.getCategorySales(startDate, endDate);
   }
 
-  // Get expense analysis
   @Get('daily-sales/expense-analysis')
   getExpenseAnalysis(
     @Query('startDate') startDate: string,
@@ -120,7 +134,6 @@ export class ReportsController {
     return this.reportsService.getExpenseAnalysis(startDate, endDate);
   }
 
-  // Get payment methods distribution for daily sales
   @Get('daily-sales/payment-methods')
   getDailySalesPaymentMethods(
     @Query('startDate') startDate: string,
@@ -129,7 +142,6 @@ export class ReportsController {
     return this.reportsService.getDailySalesPaymentMethods(startDate, endDate);
   }
 
-  // Get shortage tracking
   @Get('daily-sales/shortage-tracking')
   getShortageTracking(
     @Query('startDate') startDate: string,
@@ -138,7 +150,6 @@ export class ReportsController {
     return this.reportsService.getShortageTracking(startDate, endDate);
   }
 
-  // Get weekly comparison for daily sales
   @Get('daily-sales/weekly-comparison')
   getDailySalesWeeklyComparison() {
     return this.reportsService.getWeeklyComparison();

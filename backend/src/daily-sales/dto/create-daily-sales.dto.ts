@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsNumber,
   IsString,
+  IsUUID,
   Min,
   ValidateNested,
   IsArray,
@@ -64,8 +65,8 @@ export class StockPurchaseItemDto {
   paymentMethod: string;
 
   @IsOptional()
-  @IsString()
-  supplier?: string;
+  @IsUUID()
+  supplierId?: string;
 
   @IsOptional()
   @IsString()

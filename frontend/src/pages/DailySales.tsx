@@ -546,10 +546,11 @@ export const DailySales = () => {
             totalSales: calculateTotalSales(),
             totalCollected: calculateTotalCollected(),
             totalExpenses: calculateTotalExpenses(),
-            shortage: existingDailySales?.shortage || 0,
             netRevenue: calculateTotalSales() - calculateTotalExpenses(),
             cashAtHand: calculateCashAtHand(),
             inventories: inventories,
+            actualCashCollected:
+              existingDailySales?.actualCashCollected ?? null,
           }}
           billsAmount={billsAmount}
         />

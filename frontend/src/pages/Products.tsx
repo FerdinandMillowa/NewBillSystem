@@ -20,8 +20,10 @@ import {
   CurrencyDollarIcon,
   ExclamationTriangleIcon,
   ArrowPathIcon,
+  BuildingStorefrontIcon,
 } from "@heroicons/react/24/outline";
 import { formatCurrency } from "../utils/formatters";
+import { ManageSuppliersModal } from "../components/suppliers/ManageSuppliersModal";
 
 export const Products = () => {
   const { isAdmin } = useAuth();
@@ -33,6 +35,7 @@ export const Products = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [updatingPriceProduct, setUpdatingPriceProduct] =
     useState<Product | null>(null);
+  const [isSuppliersOpen, setIsSuppliersOpen] = useState(false);
 
   // Fetch categories
   const { data: categories } = useQuery({
@@ -166,31 +169,11 @@ export const Products = () => {
         <div className="flex space-x-3">
           <Button
             variant="secondary"
-            onClick={() => {
-              // Find unlinked bottles and their potential shot matches
-              const unlinkedBottles =
-                productsData?.products.filter(
-                  (p) => p.unit === "bottle" && !p.linkedShotProductId
-                ) || [];
-
-              const shotProducts =
-                productsData?.products.filter((p) => p.unit === "shot") || [];
-
-              if (unlinkedBottles.length === 0) {
-                toast.success("All bottles are already linked!");
-                return;
-              }
-
-              // Show a modal or alert with suggestions
-              toast.success(
-                `${unlinkedBottles.length} bottles need linking. ` +
-                  `Edit each bottle product to link to one of ${shotProducts.length} available shot products.`
-              );
-            }}
+            onClick={() => setIsSuppliersOpen(true)}
             className="flex items-center"
           >
-            <ArrowPathIcon className="w-5 h-5 mr-2" />
-            Check Bottle Links
+            <BuildingStorefrontIcon className="w-5 h-5 mr-2" />
+            Manage Suppliers
           </Button>
           <Button
             variant="secondary"
@@ -298,6 +281,11 @@ export const Products = () => {
           product={updatingPriceProduct}
         />
       )}
+
+      <ManageSuppliersModal
+        isOpen={isSuppliersOpen}
+        onClose={() => setIsSuppliersOpen(false)}
+      />
     </div>
   );
 };

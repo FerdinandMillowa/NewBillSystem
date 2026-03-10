@@ -50,4 +50,9 @@ export class UpdateProductDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  costPrice?: number;
 }

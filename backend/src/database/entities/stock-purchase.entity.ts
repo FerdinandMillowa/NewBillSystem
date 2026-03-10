@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { DailySales } from './daily-sales.entity';
 import { Product } from './product.entity';
+import { Supplier } from './supplier.entity';
 import { PaymentMethod } from '../../common/enums';
 
 @Entity('stock_purchases')
@@ -37,8 +38,9 @@ export class StockPurchase {
   })
   paymentMethod: PaymentMethod;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  supplier: string;
+  // Replaced free-text supplier with FK reference
+  @Column({ name: 'supplier_id', type: 'uuid', nullable: true })
+  supplierId: string | null;
 
   @Column({ type: 'text', nullable: true })
   notes: string;
@@ -58,4 +60,11 @@ export class StockPurchase {
   @ManyToOne(() => Product, (product) => product.stockPurchases)
   @JoinColumn({ name: 'product_id' })
   product: Product;
+
+  @ManyToOne(() => Supplier, (supplier) => supplier.stockPurchases, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'supplier_id' })
+  supplier: Supplier;
 }

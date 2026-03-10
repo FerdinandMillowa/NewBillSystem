@@ -9,8 +9,10 @@ export { DailyInventory } from './daily-inventory.entity';
 export { DailyExpense } from './daily-expense.entity';
 export { StockPurchase } from './stock-purchase.entity';
 export { InventoryTransfer } from './inventory-transfer.entity';
+export { FixedExpense, FixedExpenseCategory } from './fixed-expense.entity';
 export {
   ActivityLog,
   ActivityAction,
   ActivityEntity,
 } from './activity-log.entity';
+export { Supplier } from './supplier.entity';

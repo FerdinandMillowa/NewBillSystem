@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThanOrEqual } from 'typeorm';
+import { Repository, Between, MoreThanOrEqual, DataSource } from 'typeorm';
 import { Customer } from '../database/entities/customer.entity';
 import { Bill } from '../database/entities/bill.entity';
 import { Payment } from '../database/entities/payment.entity';
@@ -52,6 +52,7 @@ export class ReportsService {
     private productCategoryRepository: Repository<ProductCategory>,
     @InjectRepository(StockPurchase)
     private stockPurchaseRepository: Repository<StockPurchase>,
+    private dataSource: DataSource,
   ) {}
 
   async getDashboardStats(): Promise<any> {
@@ -1057,6 +1058,282 @@ export class ReportsService {
         days: dailyBreakdown.length,
       },
       dailyBreakdown,
+    };
+  }
+
+  async getProfitLossReport(
+    startDate?: string,
+    endDate?: string,
+  ): Promise<any> {
+    const now = new Date();
+    const parsedStart = startDate
+      ? startOfDay(parseISO(startDate))
+      : startOfDay(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+    const parsedEnd = endDate ? endOfDay(parseISO(endDate)) : endOfDay(now);
+
+    // ── 1. Pull all daily sales records in range ──────────────────────────
+    const dailySalesRecords = await this.dailySalesRepository.find({
+      where: { date: Between(parsedStart, parsedEnd) },
+    });
+
+    // ── 2. Pull all stock purchases in range ─────────────────────────────
+    const stockPurchases = await this.stockPurchaseRepository
+      .createQueryBuilder('sp')
+      .where('sp.transaction_date BETWEEN :start AND :end', {
+        start: parsedStart,
+        end: parsedEnd,
+      })
+      .getMany();
+
+    // ── 3. Pull all bill payments received in range ───────────────────────
+    const billPaymentsReceived = await this.paymentRepository
+      .createQueryBuilder('payment')
+      .where('payment.createdAt BETWEEN :start AND :end', {
+        start: parsedStart,
+        end: parsedEnd,
+      })
+      .getMany();
+
+    // ── 4. Pull all bills created in range ────────────────────────────────
+    const billsInRange = await this.billRepository
+      .createQueryBuilder('bill')
+      .where('bill.transaction_date BETWEEN :start AND :end', {
+        start: parsedStart,
+        end: parsedEnd,
+      })
+      .getMany();
+
+    // ── 5. Aggregate daily sales figures ─────────────────────────────────
+    let totalSales = 0;
+    let totalExpenses = 0;
+    let totalCashCollected = 0;
+    let totalAirtelMoney = 0;
+    let totalMpamba = 0;
+    let totalBank = 0;
+    let totalBillsAmount = 0;
+
+    dailySalesRecords.forEach((ds) => {
+      totalSales += parseFloat(ds.totalSales?.toString() || '0');
+      totalExpenses += parseFloat(ds.totalExpenses?.toString() || '0');
+      totalCashCollected += parseFloat(ds.cash?.toString() || '0');
+      totalAirtelMoney += parseFloat(ds.airtelMoney?.toString() || '0');
+      totalMpamba += parseFloat(ds.mpamba?.toString() || '0');
+      totalBank += parseFloat(ds.bank?.toString() || '0');
+      totalBillsAmount += parseFloat(ds.billsAmount?.toString() || '0');
+    });
+
+    // ── 6. Aggregate stock purchases — total & by payment method ─────────
+    let totalStockPurchases = 0;
+    let cashStockPurchases = 0;
+    let airtelStockPurchases = 0;
+    let mpambaStockPurchases = 0;
+    let bankStockPurchases = 0;
+
+    stockPurchases.forEach((sp) => {
+      const cost = parseFloat(sp.totalCost?.toString() || '0');
+      totalStockPurchases += cost;
+
+      const method = sp.paymentMethod?.toLowerCase() || 'cash';
+      if (method === 'cash') cashStockPurchases += cost;
+      else if (method === 'airtel_money') airtelStockPurchases += cost;
+      else if (method === 'mpamba') mpambaStockPurchases += cost;
+      else if (method === 'bank') bankStockPurchases += cost;
+      else cashStockPurchases += cost; // default to cash
+    });
+
+    // ── 7. Aggregate bill payments received ───────────────────────────────
+    const totalBillPaymentsReceived = billPaymentsReceived.reduce(
+      (sum, p) => sum + parseFloat(p.amount?.toString() || '0'),
+      0,
+    );
+
+    // ── 8. Aggregate bills raised in period ───────────────────────────────
+    const totalBillsRaised = billsInRange.reduce(
+      (sum, b) => sum + parseFloat(b.amount?.toString() || '0'),
+      0,
+    );
+
+    // Add fixed expenses query
+    const fixedExpenses = await this.dataSource.query(
+      `SELECT COALESCE(SUM(amount), 0) as total
+       FROM fixed_expenses
+       WHERE expense_date >= $1 AND expense_date <= $2`,
+      [parsedStart, parsedEnd],
+    );
+    const totalFixedExpenses = parseFloat(fixedExpenses[0]?.total || '0');
+
+    // ── 9. Profit / Loss calculations ────────────────────────────────────
+    // Gross profit = sales minus operating expenses
+    const grossProfit = totalSales - totalExpenses;
+
+    // Net profit = gross profit minus stock purchases (cost of goods)
+    const netProfit = grossProfit - totalStockPurchases;
+
+    // True net profit including fixed expenses
+    const trueNetProfit = netProfit - totalFixedExpenses;
+
+    const isProfit = trueNetProfit >= 0;
+
+    // ── 10. Where is the money? ───────────────────────────────────────────
+    // Cash at hand = cash collected from sales minus cash spent on stock
+    const cashAtHand = totalCashCollected - cashStockPurchases;
+
+    // Digital channels minus any stock purchases paid via those channels
+    const airtelMoneyBalance = totalAirtelMoney - airtelStockPurchases;
+    const mpambaBalance = totalMpamba - mpambaStockPurchases;
+    const bankBalance = totalBank - bankStockPurchases;
+
+    // Outstanding bills = bills raised in period minus payments received
+    // (money owed TO the business, not yet collected)
+    const outstandingBills = totalBillsRaised - totalBillPaymentsReceived;
+
+    // Total business position = all physical money + outstanding receivables
+    const totalBusinessPosition =
+      cashAtHand +
+      airtelMoneyBalance +
+      mpambaBalance +
+      bankBalance +
+      (outstandingBills > 0 ? outstandingBills : 0);
+
+    // ── 11. Build daily breakdown for chart ───────────────────────────────
+    const dailyBreakdown = dailySalesRecords.map((ds) => {
+      const dsSales = parseFloat(ds.totalSales?.toString() || '0');
+      const dsExpenses = parseFloat(ds.totalExpenses?.toString() || '0');
+
+      // Find stock purchases for this specific day
+      const dateStr = format(ds.date, 'yyyy-MM-dd');
+      const dayStockCost = stockPurchases
+        .filter((sp) => format(sp.transactionDate, 'yyyy-MM-dd') === dateStr)
+        .reduce(
+          (sum, sp) => sum + parseFloat(sp.totalCost?.toString() || '0'),
+          0,
+        );
+
+      return {
+        date: dateStr,
+        sales: dsSales,
+        expenses: dsExpenses,
+        stockPurchases: dayStockCost,
+        netProfit: dsSales - dsExpenses - dayStockCost,
+      };
+    });
+
+    return {
+      period: {
+        startDate: format(parsedStart, 'yyyy-MM-dd'),
+        endDate: format(parsedEnd, 'yyyy-MM-dd'),
+        totalDays: dailySalesRecords.length,
+      },
+      profitLoss: {
+        totalSales,
+        totalExpenses,
+        totalStockPurchases,
+        totalFixedExpenses,
+        grossProfit,
+        netProfit,
+        trueNetProfit,
+        isProfit,
+      },
+      moneyLocation: {
+        cashAtHand,
+        airtelMoney: airtelMoneyBalance,
+        mpamba: mpambaBalance,
+        bank: bankBalance,
+        outstandingBills: outstandingBills > 0 ? outstandingBills : 0,
+        totalBusinessPosition,
+      },
+      details: {
+        totalBillsRaised,
+        totalBillPaymentsReceived,
+        cashStockPurchases,
+        airtelStockPurchases,
+        mpambaStockPurchases,
+        bankStockPurchases,
+      },
+      dailyBreakdown,
+    };
+  }
+
+  async getSupplierAnalytics(startDate?: string, endDate?: string) {
+    const start = startDate || format(subDays(new Date(), 30), 'yyyy-MM-dd');
+    const end = endDate || format(new Date(), 'yyyy-MM-dd');
+
+    // Total spend per supplier
+    const spendPerSupplier = await this.dataSource.query(
+      `SELECT
+         s.id,
+         s.name as "supplierName",
+         COALESCE(SUM(sp.unit_cost * sp.quantity), 0) as "totalSpend",
+         COUNT(DISTINCT ds.id) as "purchaseCount"
+       FROM suppliers s
+       LEFT JOIN stock_purchases sp ON sp.supplier_id = s.id
+       LEFT JOIN daily_sales ds ON ds.id = sp.daily_sales_id
+         AND ds.date >= $1 AND ds.date <= $2
+       WHERE s.is_active = true
+       GROUP BY s.id, s.name
+       ORDER BY "totalSpend" DESC`,
+      [start, end],
+    );
+
+    // Most purchased products per supplier
+    const productsBySupplier = await this.dataSource.query(
+      `SELECT
+         s.id as "supplierId",
+         s.name as "supplierName",
+         p.name as "productName",
+         SUM(sp.quantity) as "totalQuantity",
+         SUM(sp.unit_cost * sp.quantity) as "totalSpend"
+       FROM suppliers s
+       JOIN stock_purchases sp ON sp.supplier_id = s.id
+       JOIN products p ON p.id = sp.product_id
+       JOIN daily_sales ds ON ds.id = sp.daily_sales_id
+         AND ds.date >= $1 AND ds.date <= $2
+       WHERE s.is_active = true
+       GROUP BY s.id, s.name, p.name
+       ORDER BY s.name, "totalSpend" DESC`,
+      [start, end],
+    );
+
+    // Purchase trend over time (monthly)
+    const purchaseTrend = await this.dataSource.query(
+      `SELECT
+         s.name as "supplierName",
+         TO_CHAR(ds.date, 'YYYY-MM') as month,
+         SUM(sp.unit_cost * sp.quantity) as "totalSpend"
+       FROM suppliers s
+       JOIN stock_purchases sp ON sp.supplier_id = s.id
+       JOIN daily_sales ds ON ds.id = sp.daily_sales_id
+         AND ds.date >= $1 AND ds.date <= $2
+       WHERE s.is_active = true
+       GROUP BY s.name, TO_CHAR(ds.date, 'YYYY-MM')
+       ORDER BY month ASC, "totalSpend" DESC`,
+      [start, end],
+    );
+
+    // Reshape trend into chart-friendly format: [{month, Supplier1, Supplier2}]
+    const trendByMonth: Record<string, any> = {};
+    purchaseTrend.forEach((row: any) => {
+      if (!trendByMonth[row.month])
+        trendByMonth[row.month] = { month: row.month };
+      trendByMonth[row.month][row.supplierName] = parseFloat(
+        row.totalSpend || '0',
+      );
+    });
+
+    const supplierNames = [
+      ...new Set(spendPerSupplier.map((s: any) => s.supplierName)),
+    ] as string[];
+
+    return {
+      period: { startDate: start, endDate: end },
+      spendPerSupplier: spendPerSupplier.map((s: any) => ({
+        ...s,
+        totalSpend: parseFloat(s.totalSpend || '0'),
+        purchaseCount: parseInt(s.purchaseCount || '0'),
+      })),
+      productsBySupplier,
+      purchaseTrend: Object.values(trendByMonth),
+      supplierNames,
     };
   }
 }

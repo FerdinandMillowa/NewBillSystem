@@ -44,7 +44,7 @@ export interface StockPurchaseItem {
   quantity: number;
   unitCost: number;
   paymentMethod: string;
-  supplier?: string;
+  supplierId?: string;
   notes?: string;
 }
 
@@ -104,7 +104,7 @@ export interface StockPurchase {
   unitCost: number;
   totalCost: number;
   paymentMethod: string;
-  supplier: string | null;
+  supplierId?: string | null;
   notes: string | null;
   product: Product;
   createdAt: string;

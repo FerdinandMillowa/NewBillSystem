@@ -10,6 +10,7 @@ export interface ProductCategory {
   }
   
   export interface Product {
+    costPrice: number;
     id: string;
     categoryId: string;
     name: string;
@@ -61,6 +62,7 @@ export interface ProductCategory {
     size?: string;
     currentPrice?: number;
     currentStock?: number;
+    costPrice?: number;
     shotsPerBottle?: number;
     linkedShotProductId?: string;
     isActive?: boolean;

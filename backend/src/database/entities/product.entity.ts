@@ -50,6 +50,16 @@ export class Product {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    name: 'cost_price',
+    nullable: true,
+  })
+  costPrice: number;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
