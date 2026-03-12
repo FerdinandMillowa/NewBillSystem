@@ -394,7 +394,7 @@ export const DailySales = () => {
       quantity: sp.quantity,
       unitCost: sp.unitCost,
       paymentMethod: sp.paymentMethod || "cash",
-      supplier: sp.supplier || "",
+      supplierId: sp.supplierId || null,
       notes: sp.notes || "",
     }));
 
