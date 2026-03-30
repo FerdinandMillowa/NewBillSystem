@@ -654,17 +654,17 @@ export class DailySalesService {
           throw new NotFoundException(`Product ${invItem.productId} not found`);
         }
 
+        // FIXED
         const actualStockIn = invItem.stockIn || 0;
-        const soldQuantity =
-          invItem.openingStock + actualStockIn - invItem.closingStock;
+        const convertedOut = invItem.convertedOut || 0;
+        const rawSold =
+          invItem.openingStock +
+          actualStockIn -
+          invItem.closingStock -
+          convertedOut;
+        const soldQuantity = Math.max(0, rawSold); // ✅ Excludes conversions
 
-        if (soldQuantity < 0) {
-          throw new BadRequestException(
-            `Invalid inventory for ${product.name}. Sold quantity cannot be negative.`,
-          );
-        }
-
-        const revenue = soldQuantity * product.currentPrice;
+        const revenue = soldQuantity * product.currentPrice; // ✅ Correct revenue
         totalSalesFromInventory += revenue;
 
         inventoryRecords.push(
@@ -677,8 +677,8 @@ export class DailySalesService {
             soldQuantity,
             productPrice: product.currentPrice,
             revenue,
-            convertedOut: 0,
-            convertedIn: 0,
+            convertedOut: invItem.convertedOut || 0,
+            convertedIn: invItem.convertedIn || 0,
           }),
         );
 
@@ -962,14 +962,18 @@ export class DailySalesService {
     } else {
       shotInventory.stockIn += shotsGenerated;
       shotInventory.convertedIn =
-        (shotInventory.convertedIn || 0) + shotsGenerated; // ✅ Track conversion
+        (shotInventory.convertedIn || 0) + shotsGenerated;
       shotInventory.closingStock += shotsGenerated;
 
-      // Recalculate sold quantity (convertedIn is already in stockIn)
-      shotInventory.soldQuantity =
+      // Sold = what came in (opening + stockIn) minus what's still there (closing) minus what came in via conversion (convertedIn)
+      const rawShotSold =
         shotInventory.openingStock +
         shotInventory.stockIn -
-        shotInventory.closingStock;
+        shotInventory.closingStock -
+        (shotInventory.convertedIn || 0); // ✅ Exclude converted-in shots from sold count
+      shotInventory.soldQuantity = Math.max(0, rawShotSold);
+      shotInventory.revenue =
+        shotInventory.soldQuantity * shotInventory.productPrice;
     }
 
     await this.dailyInventoryRepository.save([bottleInventory, shotInventory]);
@@ -1036,10 +1040,10 @@ export class DailySalesService {
         0,
       );
 
-    const nonCashCollected =
-      (dailySales.airtelMoney || 0) +
-      (dailySales.mpamba || 0) +
-      (dailySales.bank || 0);
+    const airtelMoney = parseFloat(String(dailySales.airtelMoney || 0)) || 0;
+    const mpamba = parseFloat(String(dailySales.mpamba || 0)) || 0;
+    const bank = parseFloat(String(dailySales.bank || 0)) || 0;
+    const nonCashCollected = airtelMoney + mpamba + bank;
 
     const cashAtHand =
       totalSales - totalExpenses - nonCashCollected - billsAmount;
@@ -1047,6 +1051,9 @@ export class DailySalesService {
     const totalCollected = cashAtHand + nonCashCollected;
     const netRevenue = totalSales - totalExpenses;
 
+    dailySales.airtelMoney = airtelMoney;
+    dailySales.mpamba = mpamba;
+    dailySales.bank = bank;
     dailySales.totalSales = totalSales;
     dailySales.billsAmount = billsAmount;
     dailySales.totalExpenses = totalExpenses;

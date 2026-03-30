@@ -27,6 +27,16 @@ export class DailyInventoryItemDto {
   @IsNumber()
   @Min(0)
   closingStock: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  convertedOut?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  convertedIn?: number;
 }
 
 export class DailyExpenseItemDto {

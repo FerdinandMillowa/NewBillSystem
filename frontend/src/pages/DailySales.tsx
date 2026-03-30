@@ -372,8 +372,6 @@ export const DailySales = () => {
         productName, // Remove - display field
         unit, // Remove - display field
         categoryId, // Remove - display field
-        convertedOut, // Remove - backend manages this
-        convertedIn, // Remove - backend manages this
         revenue, // Remove - calculated field
         productPrice, // Remove - managed by backend
         ...rest
