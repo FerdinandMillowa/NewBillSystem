@@ -30,6 +30,9 @@ export class Payment {
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
+  @Column({ type: 'timestamp', nullable: true, name: 'payment_date' })
+  paymentDate: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 

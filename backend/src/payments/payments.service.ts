@@ -25,7 +25,8 @@ export class PaymentsService {
   ) {}
 
   async create(createPaymentDto: CreatePaymentDto): Promise<Payment> {
-    const { customerId, amount, paymentMethod, notes } = createPaymentDto;
+    const { customerId, amount, paymentMethod, notes, paymentDate } =
+      createPaymentDto;
 
     // Verify customer exists and is approved
     const customer = await this.customerRepository.findOne({
@@ -72,6 +73,7 @@ export class PaymentsService {
       amount,
       paymentMethod,
       notes,
+      ...(paymentDate && { paymentDate: new Date(paymentDate) }),
     });
 
     return this.paymentRepository.save(payment);

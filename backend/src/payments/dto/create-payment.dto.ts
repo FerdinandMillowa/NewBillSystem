@@ -6,6 +6,7 @@ import {
   Min,
   IsEnum,
   IsOptional,
+  IsDateString,
 } from 'class-validator';
 import { PaymentMethod } from '../../common/enums';
 
@@ -26,4 +27,8 @@ export class CreatePaymentDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsDateString()
+  @IsOptional()
+  paymentDate?: string;
 }

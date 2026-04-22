@@ -8,9 +8,9 @@ import {
 import {
   TrashIcon,
   EyeIcon,
-  PencilIcon,
   DocumentTextIcon,
 } from "@heroicons/react/24/outline";
+import { useNavigate } from "react-router-dom";
 
 interface BillTableProps {
   bills: Bill[];
@@ -33,6 +33,7 @@ export const BillTable = ({
   onDelete,
   isDeleting,
 }: BillTableProps) => {
+  const navigate = useNavigate();
   const totalPages = Math.ceil(total / limit);
 
   if (isLoading) {
@@ -125,8 +126,12 @@ export const BillTable = ({
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                   <button
+                    onClick={() =>
+                      bill.customer?.id &&
+                      navigate(`/customers/${bill.customer.id}`)
+                    }
                     className="text-primary-600 hover:text-primary-900 inline-flex items-center"
-                    title="View Details"
+                    title="View Customer"
                   >
                     <EyeIcon className="w-4 h-4" />
                   </button>

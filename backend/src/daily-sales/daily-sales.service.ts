@@ -315,8 +315,12 @@ export class DailySalesService {
     const bank = parseFloat(String(salesData.bank)) || 0;
     const nonCashCollected = airtelMoney + mpamba + bank;
 
-    const cashAtHand =
-      totalSalesFromInventory - totalExpenses - nonCashCollected - billsAmount;
+    // cashAtHand = physical cash remaining after cash expenses.
+    // Bills (credit sales) reduce the cash that would have been received, so they
+    // are still subtracted here — but cashExpenses (not totalExpenses) is what
+    // reduces the cash on hand, because non-cash expenses don't touch physical cash.
+    const rawCash = totalSalesFromInventory - nonCashCollected - billsAmount;
+    const cashAtHand = rawCash - cashExpenses;
 
     const totalCollected = cashAtHand + nonCashCollected;
 
@@ -325,6 +329,8 @@ export class DailySalesService {
       actualCash = parseFloat(String(actualCashCollected));
     }
 
+    // shortage = difference between expected cash at hand and what was physically
+    // counted by the manager. Only meaningful when admin has entered actual cash.
     let shortage = 0;
     if (actualCash !== null) {
       const difference = cashAtHand - actualCash;
@@ -747,8 +753,10 @@ export class DailySalesService {
     const bank = parseFloat(String(salesData.bank)) || 0;
     const nonCashCollected = airtelMoney + mpamba + bank;
 
-    const cashAtHand =
-      totalSalesFromInventory - totalExpenses - nonCashCollected - billsAmount;
+    // cashAtHand = physical cash after cash-only expenses.
+    // Use cashExpenses (not totalExpenses) so non-cash expenses don't reduce cash on hand.
+    const rawCash = totalSalesFromInventory - nonCashCollected - billsAmount;
+    const cashAtHand = rawCash - cashExpenses;
 
     const totalCollected = cashAtHand + nonCashCollected;
 
@@ -760,9 +768,11 @@ export class DailySalesService {
       actualCash = parseFloat(String(salesData.actualCashCollected));
     }
 
+    // shortage only counts when cashAtHand exceeds what was physically counted
     let shortage = 0;
     if (actualCash !== null) {
-      shortage = cashAtHand - actualCash;
+      const difference = cashAtHand - actualCash;
+      shortage = difference > 0 ? difference : 0;
     }
 
     const netRevenue = totalSales - totalExpenses;
@@ -1045,11 +1055,24 @@ export class DailySalesService {
     const bank = parseFloat(String(dailySales.bank || 0)) || 0;
     const nonCashCollected = airtelMoney + mpamba + bank;
 
-    const cashAtHand =
-      totalSales - totalExpenses - nonCashCollected - billsAmount;
+    // Use cashExpenses (not totalExpenses) — only cash-paid expenses reduce physical cash
+    const rawCash = totalSales - nonCashCollected - billsAmount;
+    const cashAtHand = rawCash - cashExpenses;
 
     const totalCollected = cashAtHand + nonCashCollected;
     const netRevenue = totalSales - totalExpenses;
+
+    // Recalculate shortage using the corrected cashAtHand
+    let shortage = 0;
+    if (
+      dailySales.actualCashCollected !== null &&
+      dailySales.actualCashCollected !== undefined
+    ) {
+      const actualCash =
+        parseFloat(String(dailySales.actualCashCollected)) || 0;
+      const difference = cashAtHand - actualCash;
+      shortage = difference > 0 ? difference : 0;
+    }
 
     dailySales.airtelMoney = airtelMoney;
     dailySales.mpamba = mpamba;
@@ -1062,6 +1085,7 @@ export class DailySalesService {
     dailySales.cash = cashAtHand;
     dailySales.totalCollected = totalCollected;
     dailySales.netRevenue = netRevenue;
+    dailySales.shortage = shortage;
 
     await this.dailySalesRepository.save(dailySales);
   }

@@ -21,6 +21,7 @@ import {
   BuildingLibraryIcon,
 } from "@heroicons/react/24/outline";
 import { formatCurrency } from "../../utils/formatters";
+import { format } from "date-fns";
 
 interface CreatePaymentModalProps {
   isOpen: boolean;
@@ -294,6 +295,15 @@ export const CreatePaymentModal = ({
                       </p>
                     )}
                   </div>
+
+                  {/* Payment Date */}
+                  <Input
+                    label="Payment Date (Optional)"
+                    type="date"
+                    error={(errors as any).paymentDate?.message}
+                    {...register("paymentDate")}
+                    max={format(new Date(), "yyyy-MM-dd")}
+                  />
 
                   {/* Info Box */}
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

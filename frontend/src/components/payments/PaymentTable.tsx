@@ -14,6 +14,7 @@ import {
   DevicePhoneMobileIcon,
   BuildingLibraryIcon,
 } from "@heroicons/react/24/outline";
+import { useNavigate } from "react-router-dom";
 
 interface PaymentTableProps {
   payments: Payment[];
@@ -76,6 +77,7 @@ export const PaymentTable = ({
   onDelete,
   isDeleting,
 }: PaymentTableProps) => {
+  const navigate = useNavigate();
   const totalPages = Math.ceil(total / limit);
 
   if (isLoading) {
@@ -180,8 +182,12 @@ export const PaymentTable = ({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                     <button
+                      onClick={() =>
+                        payment.customer?.id &&
+                        navigate(`/customers/${payment.customer.id}`)
+                      }
                       className="text-primary-600 hover:text-primary-900 inline-flex items-center"
-                      title="View Details"
+                      title="View Customer"
                     >
                       <EyeIcon className="w-4 h-4" />
                     </button>
