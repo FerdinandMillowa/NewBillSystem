@@ -17,4 +17,5 @@ export interface CreatePaymentRequest {
   amount: number;
   paymentMethod: PaymentMethod;
   notes?: string;
+  paymentDate?: string;
 }
