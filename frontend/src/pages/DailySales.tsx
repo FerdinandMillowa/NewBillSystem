@@ -152,16 +152,27 @@ export const DailySales = () => {
     return cashAtHand + airtelMoney + mpamba + bank;
   };
 
+  const calculateCashExpenses = () => {
+    return expenses.reduce((sum, exp) => {
+      const method = exp.paymentMethod || "cash";
+      if (method === "cash") {
+        return sum + (parseFloat(String(exp.amount)) || 0);
+      }
+      return sum;
+    }, 0);
+  };
+
   const calculateCashAtHand = () => {
     const totalSales = calculateTotalSales();
-    const totalExpenses = calculateTotalExpenses();
+    const cashExpenses = calculateCashExpenses(); // only cash-paid expenses
     const airtelMoney = parseFloat(String(revenueData.airtelMoney)) || 0;
     const mpamba = parseFloat(String(revenueData.mpamba)) || 0;
     const bank = parseFloat(String(revenueData.bank)) || 0;
 
-    // Use calculated billsAmount, not from backend
+    // Non-cash expenses do not reduce physical cash at hand.
+    // Only cash expenses, digital collections, and bills reduce it.
     return (
-      totalSales - totalExpenses - airtelMoney - mpamba - bank - billsAmount
+      totalSales - cashExpenses - airtelMoney - mpamba - bank - billsAmount
     );
   };
 
