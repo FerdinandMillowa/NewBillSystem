@@ -8,6 +8,7 @@ export interface Payment {
   amount: number;
   paymentMethod: PaymentMethod;
   notes: string | null;
+  paymentDate: Date | string | null;
   createdAt: string;
   customer?: Customer;
 }
