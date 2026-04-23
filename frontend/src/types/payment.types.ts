@@ -8,7 +8,7 @@ export interface Payment {
   amount: number;
   paymentMethod: PaymentMethod;
   notes: string | null;
-  paymentDate: Date | string | null;
+  paymentDate: string;
   createdAt: string;
   customer?: Customer;
 }
