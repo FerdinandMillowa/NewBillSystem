@@ -68,14 +68,12 @@ export const CreatePaymentModal = ({
   const queryClient = useQueryClient();
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
 
-  // Fetch approved customers
   const { data: customersData } = useQuery({
     queryKey: ["customers", { status: "approved" }],
     queryFn: () => customersService.getAll({ status: "approved", limit: 100 }),
     enabled: isOpen,
   });
 
-  // Fetch customer balance
   const { data: customerData } = useQuery({
     queryKey: ["customer", selectedCustomerId],
     queryFn: () => customersService.getById(selectedCustomerId),
@@ -235,7 +233,7 @@ export const CreatePaymentModal = ({
                     {...register("amount", { valueAsNumber: true })}
                   />
 
-                  {/* Payment Method - Now shows 5 options in grid */}
+                  {/* Payment Method */}
                   <div>
                     <label className="label">Payment Method *</label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -300,7 +298,7 @@ export const CreatePaymentModal = ({
                   <Input
                     label="Payment Date (Optional)"
                     type="date"
-                    error={(errors as any).paymentDate?.message}
+                    error={errors.paymentDate?.message}
                     {...register("paymentDate")}
                     max={format(new Date(), "yyyy-MM-dd")}
                   />

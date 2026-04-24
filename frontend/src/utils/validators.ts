@@ -23,6 +23,7 @@ export const billSchema = z.object({
 export const paymentSchema = z.object({
   customerId: z.string().uuid('Please select a customer'),
   amount: z.number().min(0, 'Amount must be positive'),
-  paymentMethod: z.enum(['cash', 'mobile_money', 'bank', 'card']),
+  paymentMethod: z.enum(['cash', 'mobile_money', 'bank', 'card', 'mpamba', 'airtel_money']),
   notes: z.string().optional(),
+  paymentDate: z.string().optional(),
 });
