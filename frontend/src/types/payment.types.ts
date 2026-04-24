@@ -1,6 +1,6 @@
 import type { Customer } from "./customer.types";
 
-export type PaymentMethod = 'cash' | 'mobile_money' | 'bank' | 'card';
+export type PaymentMethod = 'cash' | 'mobile_money' | 'bank' | 'card' | 'mpamba' | 'airtel_money';
 
 export interface Payment {
   id: string;
@@ -8,7 +8,7 @@ export interface Payment {
   amount: number;
   paymentMethod: PaymentMethod;
   notes: string | null;
-  paymentDate: string;
+  paymentDate: string | null;
   createdAt: string;
   customer?: Customer;
 }

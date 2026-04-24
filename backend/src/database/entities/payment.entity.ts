@@ -30,10 +30,10 @@ export class Payment {
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
-  @Column({ type: 'timestamp', nullable: true, name: 'payment_date' })
+  @Column({ type: 'timestamptz', nullable: true, name: 'payment_date' })
   paymentDate: Date | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
   @ManyToOne(() => Customer, (customer: Customer) => customer.payments, {

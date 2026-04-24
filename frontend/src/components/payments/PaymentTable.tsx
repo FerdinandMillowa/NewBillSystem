@@ -67,6 +67,19 @@ const getPaymentMethodColor = (method: string) => {
   }
 };
 
+/**
+ * Safely format a date value that may be null or undefined.
+ * new Date(null) produces Jan 1 1970 (epoch), so we must guard
+ * against null/undefined before delegating to formatDate.
+ */
+const formatPaymentDate = (
+  value: string | null | undefined,
+  fallback = "—"
+): string => {
+  if (value === null || value === undefined || value === "") return fallback;
+  return formatDate(value);
+};
+
 export const PaymentTable = ({
   payments,
   isLoading,
@@ -178,7 +191,8 @@ export const PaymentTable = ({
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(payment.paymentDate)}
+                    {/* FIX: use formatPaymentDate to guard against null -> epoch (Jan 1 1970) */}
+                    {formatPaymentDate(payment.paymentDate)}
                     <div className="text-xs text-gray-400">
                       Recorded: {formatDate(payment.createdAt)}
                     </div>
