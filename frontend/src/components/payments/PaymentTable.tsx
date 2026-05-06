@@ -13,6 +13,8 @@ import {
   CreditCardIcon,
   DevicePhoneMobileIcon,
   BuildingLibraryIcon,
+  CheckCircleIcon,
+  ClockIcon,
 } from "@heroicons/react/24/outline";
 import { useNavigate } from "react-router-dom";
 
@@ -24,7 +26,9 @@ interface PaymentTableProps {
   limit: number;
   onPageChange: (page: number) => void;
   onDelete?: (payment: Payment) => void;
+  onVerify?: (payment: Payment) => void;
   isDeleting?: boolean;
+  isVerifying?: boolean;
 }
 
 const getPaymentMethodIcon = (method: string) => {
@@ -39,7 +43,6 @@ const getPaymentMethodIcon = (method: string) => {
       return BuildingLibraryIcon;
     case "card":
       return CreditCardIcon;
-    // Legacy support
     case "mobile_money":
       return DevicePhoneMobileIcon;
     default:
@@ -59,7 +62,6 @@ const getPaymentMethodColor = (method: string) => {
       return "bg-purple-100 text-purple-800";
     case "card":
       return "bg-orange-100 text-orange-800";
-    // Legacy support
     case "mobile_money":
       return "bg-blue-100 text-blue-800";
     default:
@@ -69,8 +71,6 @@ const getPaymentMethodColor = (method: string) => {
 
 /**
  * Safely format a date value that may be null or undefined.
- * new Date(null) produces Jan 1 1970 (epoch), so we must guard
- * against null/undefined before delegating to formatDate.
  */
 const formatPaymentDate = (
   value: string | null | undefined,
@@ -88,7 +88,9 @@ export const PaymentTable = ({
   limit,
   onPageChange,
   onDelete,
+  onVerify,
   isDeleting,
+  isVerifying,
 }: PaymentTableProps) => {
   const navigate = useNavigate();
   const totalPages = Math.ceil(total / limit);
@@ -129,7 +131,10 @@ export const PaymentTable = ({
                 Amount
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Notes
+                Reference
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Payment Date
@@ -142,6 +147,7 @@ export const PaymentTable = ({
           <tbody className="bg-white divide-y divide-gray-200">
             {payments.map((payment) => {
               const MethodIcon = getPaymentMethodIcon(payment.paymentMethod);
+              const isPending = payment.paymentStatus === "pending";
               return (
                 <tr key={payment.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
@@ -185,13 +191,36 @@ export const PaymentTable = ({
                       {formatCurrency(payment.amount)}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-500 max-w-xs truncate">
-                      {payment.notes || "-"}
-                    </div>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {payment.referenceNumber ? (
+                      <span className="text-sm font-mono text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
+                        {payment.referenceNumber}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {isPending ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        <ClockIcon className="w-3 h-3 mr-1" />
+                        Pending
+                      </span>
+                    ) : (
+                      <div>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <CheckCircleIcon className="w-3 h-3 mr-1" />
+                          Verified
+                        </span>
+                        {payment.verifiedAt && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {formatDate(payment.verifiedAt)}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {/* FIX: use formatPaymentDate to guard against null -> epoch (Jan 1 1970) */}
                     {formatPaymentDate(payment.paymentDate)}
                     <div className="text-xs text-gray-400">
                       Recorded: {formatDate(payment.createdAt)}
@@ -208,6 +237,17 @@ export const PaymentTable = ({
                     >
                       <EyeIcon className="w-4 h-4" />
                     </button>
+                    {/* Mark Verified — shown to admins only when payment is still pending */}
+                    {onVerify && isPending && (
+                      <button
+                        onClick={() => onVerify(payment)}
+                        disabled={isVerifying}
+                        className="text-green-600 hover:text-green-900 inline-flex items-center disabled:opacity-50"
+                        title="Mark as Verified"
+                      >
+                        <CheckCircleIcon className="w-4 h-4" />
+                      </button>
+                    )}
                     {onDelete && (
                       <button
                         onClick={() => onDelete(payment)}

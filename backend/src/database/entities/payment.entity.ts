@@ -6,7 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { PaymentMethod } from '../../common/enums';
+import { PaymentMethod, PaymentStatus } from '../../common/enums';
 import { Customer } from './customer.entity';
 
 @Entity('payments')
@@ -32,6 +32,23 @@ export class Payment {
 
   @Column({ type: 'timestamptz', nullable: true, name: 'payment_date' })
   paymentDate: Date | null;
+
+  @Column({ type: 'text', nullable: true, name: 'reference_number' })
+  referenceNumber: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: PaymentStatus,
+    name: 'payment_status',
+    default: PaymentStatus.PENDING,
+  })
+  paymentStatus: PaymentStatus;
+
+  @Column({ type: 'timestamptz', nullable: true, name: 'verified_at' })
+  verifiedAt: Date | null;
+
+  @Column({ type: 'uuid', nullable: true, name: 'verified_by' })
+  verifiedBy: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

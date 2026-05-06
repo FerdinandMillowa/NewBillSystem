@@ -31,4 +31,8 @@ export class CreatePaymentDto {
   @IsDateString()
   @IsOptional()
   paymentDate?: string;
+
+  @IsString()
+  @IsOptional()
+  referenceNumber?: string;
 }

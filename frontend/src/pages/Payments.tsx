@@ -84,6 +84,26 @@ export const Payments = () => {
     },
   });
 
+  // Verify payment mutation
+  const verifyMutation = useMutation({
+    mutationFn: (id: string) => paymentsService.verify(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+      queryClient.invalidateQueries({ queryKey: ["payment-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success("Payment verified successfully!");
+    },
+    onError: (error: any) => {
+      if (error?.response?.status === 403) {
+        toast.error("You don't have permission to verify payments");
+      } else {
+        toast.error(
+          error?.response?.data?.message || "Failed to verify payment"
+        );
+      }
+    },
+  });
+
   const handleDelete = (payment: Payment) => {
     if (!isAdmin) {
       toast.error("Only administrators can delete payments");
@@ -97,6 +117,16 @@ export const Payments = () => {
       )
     ) {
       deleteMutation.mutate(payment.id);
+    }
+  };
+
+  const handleVerify = (payment: Payment) => {
+    if (
+      window.confirm(
+        `Mark this ${formatCurrency(payment.amount)} payment as verified?`
+      )
+    ) {
+      verifyMutation.mutate(payment.id);
     }
   };
 
@@ -262,7 +292,9 @@ export const Payments = () => {
           limit={filters.limit}
           onPageChange={handlePageChange}
           onDelete={isAdmin ? handleDelete : undefined}
+          onVerify={isAdmin ? handleVerify : undefined}
           isDeleting={deleteMutation.isPending}
+          isVerifying={verifyMutation.isPending}
         />
       </Card>
 

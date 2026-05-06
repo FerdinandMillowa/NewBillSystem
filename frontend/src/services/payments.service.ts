@@ -33,6 +33,11 @@ export const paymentsService = {
     return data;
   },
 
+  verify: async (id: string): Promise<Payment> => {
+    const { data } = await api.patch(`/payments/${id}/verify`);
+    return data;
+  },
+
   delete: async (id: string): Promise<void> => {
     await api.delete(`/payments/${id}`);
   },

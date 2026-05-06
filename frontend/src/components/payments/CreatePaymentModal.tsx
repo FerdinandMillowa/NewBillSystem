@@ -61,6 +61,14 @@ const paymentMethods = [
   },
 ];
 
+const referenceNumberPlaceholder: Record<string, string> = {
+  mpamba: "e.g. MPAM9182",
+  airtel_money: "e.g. AIR20260129",
+  bank: "e.g. FDH202601291847",
+  card: "e.g. POS-0042",
+  mobile_money: "e.g. MM123456",
+};
+
 export const CreatePaymentModal = ({
   isOpen,
   onClose,
@@ -95,6 +103,7 @@ export const CreatePaymentModal = ({
   });
 
   const selectedMethod = watch("paymentMethod");
+  const requiresReference = selectedMethod !== "cash";
 
   const createMutation = useMutation({
     mutationFn: (data: CreatePaymentRequest) => paymentsService.create(data),
@@ -127,6 +136,14 @@ export const CreatePaymentModal = ({
   const handleCustomerChange = (customerId: string) => {
     setSelectedCustomerId(customerId);
     setValue("customerId", customerId);
+  };
+
+  const handleMethodChange = (method: PaymentMethod) => {
+    setValue("paymentMethod", method);
+    // Clear reference number when switching to cash
+    if (method === "cash") {
+      setValue("referenceNumber", "");
+    }
   };
 
   return (
@@ -244,9 +261,7 @@ export const CreatePaymentModal = ({
                           <button
                             key={method.value}
                             type="button"
-                            onClick={() =>
-                              setValue("paymentMethod", method.value)
-                            }
+                            onClick={() => handleMethodChange(method.value)}
                             className={`p-4 border-2 rounded-lg transition-all ${
                               isSelected
                                 ? "border-primary-500 bg-primary-50"
@@ -278,6 +293,26 @@ export const CreatePaymentModal = ({
                     )}
                   </div>
 
+                  {/* Reference Number — required for all non-cash methods */}
+                  {requiresReference && (
+                    <div>
+                      <label className="label">Reference Number *</label>
+                      <Input
+                        type="text"
+                        placeholder={
+                          referenceNumberPlaceholder[selectedMethod] ??
+                          "Enter transaction reference"
+                        }
+                        error={errors.referenceNumber?.message}
+                        {...register("referenceNumber")}
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Enter the transaction ID or reference from the payment
+                        confirmation.
+                      </p>
+                    </div>
+                  )}
+
                   {/* Notes */}
                   <div>
                     <label className="label">Notes (Optional)</label>
@@ -306,8 +341,11 @@ export const CreatePaymentModal = ({
                   {/* Info Box */}
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-sm text-blue-800">
-                      ℹ️ Recording this payment will reduce the customer's
-                      outstanding balance immediately.
+                      ℹ️ This payment will be saved as{" "}
+                      <span className="font-semibold">pending</span> and must be
+                      verified by an administrator.{" "}
+                      {requiresReference &&
+                        "The reference number will be used for verification."}
                     </p>
                   </div>
 

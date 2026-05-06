@@ -52,6 +52,8 @@ export const getPaymentMethodLabel = (method: string): string => {
   const labels: Record<string, string> = {
     cash: 'Cash',
     mobile_money: 'Mobile Money',
+    mpamba: 'Mpamba',
+    airtel_money: 'Airtel Money',
     bank: 'Bank Transfer',
     card: 'Card',
   };
@@ -64,6 +66,7 @@ export const getStatusBadgeColor = (status: string): string => {
     approved: 'bg-green-100 text-green-800',
     active: 'bg-green-100 text-green-800',
     inactive: 'bg-red-100 text-red-800',
+    verified: 'bg-green-100 text-green-800',
   };
   return colors[status] || 'bg-gray-100 text-gray-800';
 };

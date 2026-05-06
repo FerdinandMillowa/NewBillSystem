@@ -20,10 +20,24 @@ export const billSchema = z.object({
   transactionDate: z.string().optional(),
 });
 
-export const paymentSchema = z.object({
-  customerId: z.string().uuid('Please select a customer'),
-  amount: z.number().min(0, 'Amount must be positive'),
-  paymentMethod: z.enum(['cash', 'mobile_money', 'bank', 'card', 'mpamba', 'airtel_money']),
-  notes: z.string().optional(),
-  paymentDate: z.string().optional(),
-});
+export const paymentSchema = z
+  .object({
+    customerId: z.string().uuid('Please select a customer'),
+    amount: z.number().min(0, 'Amount must be positive'),
+    paymentMethod: z.enum(['cash', 'mobile_money', 'bank', 'card', 'mpamba', 'airtel_money']),
+    notes: z.string().optional(),
+    paymentDate: z.string().optional(),
+    referenceNumber: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.paymentMethod !== 'cash' &&
+      (!data.referenceNumber || data.referenceNumber.trim() === '')
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Reference number is required for non-cash payments',
+        path: ['referenceNumber'],
+      });
+    }
+  });

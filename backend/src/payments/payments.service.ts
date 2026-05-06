@@ -11,7 +11,12 @@ import { Bill } from '../database/entities/bill.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { QueryPaymentsDto } from './dto/query-payments.dto';
-import { CustomerStatus, PaymentMethod } from '../common/enums';
+import {
+  CustomerStatus,
+  PaymentMethod,
+  PaymentStatus,
+  UserRole,
+} from '../common/enums';
 
 @Injectable()
 export class PaymentsService {
@@ -24,9 +29,18 @@ export class PaymentsService {
     private billRepository: Repository<Bill>,
   ) {}
 
-  async create(createPaymentDto: CreatePaymentDto): Promise<Payment> {
-    const { customerId, amount, paymentMethod, notes, paymentDate } =
-      createPaymentDto;
+  async create(
+    createPaymentDto: CreatePaymentDto,
+    userRole: UserRole,
+  ): Promise<Payment> {
+    const {
+      customerId,
+      amount,
+      paymentMethod,
+      notes,
+      paymentDate,
+      referenceNumber,
+    } = createPaymentDto;
 
     // Verify customer exists and is approved
     const customer = await this.customerRepository.findOne({
@@ -40,6 +54,13 @@ export class PaymentsService {
     if (customer.status !== CustomerStatus.APPROVED) {
       throw new BadRequestException(
         'Customer must be approved before recording payments',
+      );
+    }
+
+    // Non-cash payments must include a reference number
+    if (paymentMethod !== PaymentMethod.CASH && !referenceNumber?.trim()) {
+      throw new BadRequestException(
+        'A reference number is required for non-cash payments',
       );
     }
 
@@ -60,21 +81,52 @@ export class PaymentsService {
     const payments = parseFloat(totalPayments?.total || '0');
     const outstandingBalance = bills - payments;
 
-    // Warn if payment exceeds outstanding balance
+    // Warn if payment exceeds outstanding balance (allowed but noted)
     if (amount > outstandingBalance) {
       // You can choose to throw an error or allow overpayment
       // For now, we'll allow it but you can uncomment the line below to prevent it
       // throw new BadRequestException(`Payment amount (${amount}) exceeds outstanding balance (${outstandingBalance})`);
     }
 
-    // Create payment
+    // Auto-verify: admin recording a cash payment is verified immediately
+    const isAdminCash =
+      userRole === UserRole.ADMIN && paymentMethod === PaymentMethod.CASH;
+
     const payment = this.paymentRepository.create({
       customerId,
       amount,
       paymentMethod,
       notes,
+      referenceNumber: referenceNumber?.trim() || null,
+      paymentStatus: isAdminCash
+        ? PaymentStatus.VERIFIED
+        : PaymentStatus.PENDING,
+      verifiedAt: isAdminCash ? new Date() : null,
+      // verifiedBy is not set on create — only set explicitly via verify()
+      verifiedBy: null,
       ...(paymentDate && { paymentDate: new Date(paymentDate) }),
     });
+
+    return this.paymentRepository.save(payment);
+  }
+
+  async verify(id: string, adminUserId: string): Promise<Payment> {
+    const payment = await this.paymentRepository.findOne({
+      where: { id },
+      relations: ['customer'],
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+
+    if (payment.paymentStatus === PaymentStatus.VERIFIED) {
+      throw new BadRequestException('Payment is already verified');
+    }
+
+    payment.paymentStatus = PaymentStatus.VERIFIED;
+    payment.verifiedAt = new Date();
+    payment.verifiedBy = adminUserId;
 
     return this.paymentRepository.save(payment);
   }
