@@ -18,6 +18,7 @@ import { DailySalesModule } from './daily-sales/daily-sales.module';
 import { ActivityLogInterceptor } from './common/interceptors/activity-log.interceptor';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { FixedExpensesModule } from './fixed-expenses/fixed-expenses.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -44,10 +45,10 @@ import { FixedExpensesModule } from './fixed-expenses/fixed-expenses.module';
     DailySalesModule,
     SuppliersModule,
     FixedExpensesModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [
-    // Register the ActivityLogInterceptor globally
     {
       provide: APP_INTERCEPTOR,
       useClass: ActivityLogInterceptor,

@@ -33,7 +33,9 @@ export class Payment {
   @Column({ type: 'timestamptz', nullable: true, name: 'payment_date' })
   paymentDate: Date | null;
 
-  @Column({ type: 'text', nullable: true, name: 'reference_number' })
+  // Unique per payment — enforced at DB level. NULL is allowed (cash payments have no ref).
+  // PostgreSQL treats each NULL as distinct, so multiple cash payments (all NULL) do not conflict.
+  @Column({ type: 'text', nullable: true, name: 'reference_number', unique: true })
   referenceNumber: string | null;
 
   @Column({

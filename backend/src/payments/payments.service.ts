@@ -17,6 +17,7 @@ import {
   PaymentStatus,
   UserRole,
 } from '../common/enums';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class PaymentsService {
@@ -27,6 +28,7 @@ export class PaymentsService {
     private customerRepository: Repository<Customer>,
     @InjectRepository(Bill)
     private billRepository: Repository<Bill>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(
@@ -102,12 +104,32 @@ export class PaymentsService {
         ? PaymentStatus.VERIFIED
         : PaymentStatus.PENDING,
       verifiedAt: isAdminCash ? new Date() : null,
-      // verifiedBy is not set on create — only set explicitly via verify()
       verifiedBy: null,
       ...(paymentDate && { paymentDate: new Date(paymentDate) }),
     });
 
-    return this.paymentRepository.save(payment);
+    const savedPayment = await this.paymentRepository.save(payment);
+
+    // If admin cash payment — auto-verified — send confirmation immediately
+    if (isAdminCash) {
+      const newBalance = outstandingBalance - amount;
+
+      this.notificationsService.sendPaymentNotification({
+        customerFirstName: customer.firstName,
+        customerLastName: customer.lastName,
+        customerEmail: customer.email,
+        paymentId: savedPayment.id,
+        amount,
+        paymentMethod,
+        referenceNumber: null,
+        notes: notes ?? null,
+        paymentDate: savedPayment.paymentDate,
+        verifiedAt: savedPayment.verifiedAt!,
+        outstandingBalance: newBalance,
+      });
+    }
+
+    return savedPayment;
   }
 
   async verify(id: string, adminUserId: string): Promise<Payment> {
@@ -128,7 +150,45 @@ export class PaymentsService {
     payment.verifiedAt = new Date();
     payment.verifiedBy = adminUserId;
 
-    return this.paymentRepository.save(payment);
+    const savedPayment = await this.paymentRepository.save(payment);
+
+    // Calculate updated outstanding balance after this payment
+    const totalBillsResult = await this.billRepository
+      .createQueryBuilder('bill')
+      .select('SUM(bill.amount)', 'total')
+      .where('bill.customerId = :customerId', {
+        customerId: payment.customerId,
+      })
+      .getRawOne();
+
+    const totalPaymentsResult = await this.paymentRepository
+      .createQueryBuilder('payment')
+      .select('SUM(payment.amount)', 'total')
+      .where('payment.customerId = :customerId', {
+        customerId: payment.customerId,
+      })
+      .getRawOne();
+
+    const totalBills = parseFloat(totalBillsResult?.total || '0');
+    const totalPaid = parseFloat(totalPaymentsResult?.total || '0');
+    const outstandingBalance = totalBills - totalPaid;
+
+    // Fire verification confirmation email — non-blocking, silent failure
+    this.notificationsService.sendPaymentNotification({
+      customerFirstName: payment.customer.firstName,
+      customerLastName: payment.customer.lastName,
+      customerEmail: payment.customer.email,
+      paymentId: savedPayment.id,
+      amount: parseFloat(payment.amount.toString()),
+      paymentMethod: payment.paymentMethod,
+      referenceNumber: payment.referenceNumber,
+      notes: payment.notes,
+      paymentDate: payment.paymentDate,
+      verifiedAt: savedPayment.verifiedAt!,
+      outstandingBalance,
+    });
+
+    return savedPayment;
   }
 
   async findAll(queryDto: QueryPaymentsDto): Promise<{
@@ -149,19 +209,16 @@ export class PaymentsService {
       .createQueryBuilder('payment')
       .leftJoinAndSelect('payment.customer', 'customer');
 
-    // Filter by customer
     if (customerId) {
       queryBuilder.where('payment.customerId = :customerId', { customerId });
     }
 
-    // Filter by payment method
     if (paymentMethod) {
       queryBuilder.andWhere('payment.paymentMethod = :paymentMethod', {
         paymentMethod,
       });
     }
 
-    // Search by notes or customer name
     if (search) {
       queryBuilder.andWhere(
         '(payment.notes ILIKE :search OR customer.firstName ILIKE :search OR customer.lastName ILIKE :search)',
@@ -169,11 +226,8 @@ export class PaymentsService {
       );
     }
 
-    // Pagination
     const skip = (page - 1) * limit;
     queryBuilder.skip(skip).take(limit);
-
-    // Order by creation date (newest first)
     queryBuilder.orderBy('payment.createdAt', 'DESC');
 
     const [payments, total] = await queryBuilder.getManyAndCount();
@@ -200,7 +254,6 @@ export class PaymentsService {
   }
 
   async findByCustomer(customerId: string): Promise<Payment[]> {
-    // Verify customer exists
     const customer = await this.customerRepository.findOne({
       where: { id: customerId },
     });
@@ -227,7 +280,6 @@ export class PaymentsService {
       throw new NotFoundException('Payment not found');
     }
 
-    // Update payment
     Object.assign(payment, updatePaymentDto);
     return this.paymentRepository.save(payment);
   }
@@ -269,7 +321,6 @@ export class PaymentsService {
       .select('AVG(payment.amount)', 'average')
       .getRawOne();
 
-    // Get payments by method
     const paymentsByMethod = await this.paymentRepository
       .createQueryBuilder('payment')
       .select('payment.paymentMethod', 'method')
@@ -278,7 +329,6 @@ export class PaymentsService {
       .groupBy('payment.paymentMethod')
       .getRawMany();
 
-    // Get payments by month (last 6 months)
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 

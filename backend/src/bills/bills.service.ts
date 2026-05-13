@@ -7,11 +7,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Bill } from '../database/entities/bill.entity';
 import { Customer } from '../database/entities/customer.entity';
+import { Payment } from '../database/entities/payment.entity';
 import { CreateBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { QueryBillsDto } from './dto/query-bills.dto';
 import { CustomerStatus } from '../common/enums';
 import { DailySales } from '../database/entities/daily-sales.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class BillsService {
@@ -22,6 +24,9 @@ export class BillsService {
     private customerRepository: Repository<Customer>,
     @InjectRepository(DailySales)
     private dailySalesRepository: Repository<DailySales>,
+    @InjectRepository(Payment)
+    private paymentRepository: Repository<Payment>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(createBillDto: CreateBillDto): Promise<Bill> {
@@ -42,10 +47,10 @@ export class BillsService {
       );
     }
 
-    // ✅ Determine business date
+    // Determine business date
     let businessDate = transactionDate ? new Date(transactionDate) : new Date();
 
-    // ✅ If linked to daily sales, use that date
+    // If linked to daily sales, use that date
     if (dailySalesId && !transactionDate) {
       const dailySales = await this.dailySalesRepository.findOne({
         where: { id: dailySalesId },
@@ -60,10 +65,43 @@ export class BillsService {
       amount,
       description,
       dailySalesId: dailySalesId || null,
-      transactionDate: businessDate, // ✅ SET TRANSACTION DATE
+      transactionDate: businessDate,
     });
 
-    return await this.billRepository.save(bill);
+    const savedBill = await this.billRepository.save(bill);
+
+    // Calculate outstanding balance for the notification
+    // Done after save so this bill is included in the total
+    const totalBillsResult = await this.billRepository
+      .createQueryBuilder('bill')
+      .select('SUM(bill.amount)', 'total')
+      .where('bill.customerId = :customerId', { customerId })
+      .getRawOne();
+
+    const totalPaymentsResult = await this.paymentRepository
+      .createQueryBuilder('payment')
+      .select('SUM(payment.amount)', 'total')
+      .where('payment.customerId = :customerId', { customerId })
+      .getRawOne();
+
+    const totalBills = parseFloat(totalBillsResult?.total || '0');
+    const totalPayments = parseFloat(totalPaymentsResult?.total || '0');
+    const outstandingBalance = totalBills - totalPayments;
+
+    // Fire email notification — non-blocking, silent failure
+    this.notificationsService.sendBillNotification({
+      customerFirstName: customer.firstName,
+      customerLastName: customer.lastName,
+      customerEmail: customer.email,
+      billId: savedBill.id,
+      amount: parseFloat(amount.toString()),
+      description,
+      transactionDate: businessDate,
+      outstandingBalance,
+      createdAt: savedBill.createdAt,
+    });
+
+    return savedBill;
   }
 
   async findAll(queryDto: QueryBillsDto): Promise<{
