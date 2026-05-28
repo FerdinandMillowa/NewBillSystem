@@ -1,6 +1,7 @@
 const LOGO_URL = 'https://pitch-roll-bar-xyz123.vercel.app/logo.png';
 const BRAND_COLOR = '#1a1a2e';
 const ACCENT_COLOR = '#16a34a';
+const BACKEND_URL = 'https://pitch-roll-backend.onrender.com';
 
 export interface PaymentNotificationData {
   customerFirstName: string;
@@ -77,6 +78,13 @@ export function buildPaymentNotificationHtml(
   const balanceColor = outstandingBalance > 0 ? '#dc2626' : '#16a34a';
   const methodColor = getMethodBadgeColor(paymentMethod);
   const methodLabel = formatPaymentMethod(paymentMethod);
+
+  // Pay Online link for remaining balance (only shown if still outstanding)
+  const payUrl =
+    outstandingBalance > 0
+      ? `${BACKEND_URL}/paychangu/checkout` +
+        `?amount=${encodeURIComponent(outstandingBalance.toString())}`
+      : null;
 
   return `
 <!DOCTYPE html>
@@ -159,7 +167,6 @@ export function buildPaymentNotificationHtml(
                   </td>
                 </tr>
 
-                <!-- Reference number row (non-cash only) -->
                 ${
                   referenceNumber
                     ? `
@@ -177,11 +184,11 @@ export function buildPaymentNotificationHtml(
                   <td style="padding:0;">
                     <table width="100%" cellpadding="0" cellspacing="0">
                       <tr>
-                        <td style="padding:16px 24px;width:50%;${paymentDate ? 'border-bottom:1px solid #e5e7eb;' : ''}">
+                        <td style="padding:16px 24px;width:50%;">
                           <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.5px;">Payment Date</p>
                           <p style="margin:0;font-size:14px;color:#111827;font-weight:500;">${paymentDate ? formatDate(paymentDate) : '—'}</p>
                         </td>
-                        <td style="padding:16px 24px;width:50%;border-left:1px solid #e5e7eb;${paymentDate ? 'border-bottom:1px solid #e5e7eb;' : ''}">
+                        <td style="padding:16px 24px;width:50%;border-left:1px solid #e5e7eb;">
                           <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.5px;">Verified On</p>
                           <p style="margin:0;font-size:14px;color:#111827;font-weight:500;">${formatDate(verifiedAt)}</p>
                         </td>
@@ -190,7 +197,6 @@ export function buildPaymentNotificationHtml(
                   </td>
                 </tr>
 
-                <!-- Notes row (if present) -->
                 ${
                   notes
                     ? `
@@ -235,6 +241,76 @@ export function buildPaymentNotificationHtml(
               </table>
             </td>
           </tr>
+
+          ${
+            outstandingBalance > 0
+              ? `
+          <!-- Pay remaining online -->
+          <tr>
+            <td style="padding:20px 40px 0;text-align:center;">
+              <a href="${payUrl}"
+                 style="display:inline-block;background-color:#e94560;color:#ffffff;font-size:14px;font-weight:700;padding:12px 32px;border-radius:8px;text-decoration:none;">
+                Pay Remaining Balance Online
+              </a>
+              <p style="margin:8px 0 0;font-size:12px;color:#9ca3af;">
+                You can adjust the amount on the payment page.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Payment Methods -->
+          <tr>
+            <td style="padding:20px 40px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+                <tr>
+                  <td style="padding:16px 24px;border-bottom:1px solid #e5e7eb;">
+                    <p style="margin:0;font-size:13px;font-weight:600;color:#374151;">Other Ways to Settle Your Remaining Balance</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 24px;border-bottom:1px solid #e5e7eb;">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding-right:12px;font-size:18px;">🏦</td>
+                        <td>
+                          <p style="margin:0;font-size:13px;font-weight:600;color:#374151;">National Bank of Malawi</p>
+                          <p style="margin:0;font-size:13px;color:#6b7280;">Account Number: <strong style="color:#111827;font-family:monospace;">1007565921</strong></p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 24px;border-bottom:1px solid #e5e7eb;">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding-right:12px;font-size:18px;">📱</td>
+                        <td>
+                          <p style="margin:0;font-size:13px;font-weight:600;color:#374151;">Mpamba</p>
+                          <p style="margin:0;font-size:13px;color:#6b7280;">Agent Code: <strong style="color:#111827;font-family:monospace;">122581</strong> &nbsp;·&nbsp; Agent Name: <strong style="color:#111827;">Pitch and Roll</strong></p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 24px;">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding-right:12px;font-size:18px;">📱</td>
+                        <td>
+                          <p style="margin:0;font-size:13px;font-weight:600;color:#374151;">Airtel Money</p>
+                          <p style="margin:0;font-size:13px;color:#6b7280;">Agent Code: <strong style="color:#111827;font-family:monospace;">788577</strong> &nbsp;·&nbsp; Agent Name: <strong style="color:#111827;">Pitch and Roll</strong></p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>`
+              : ''
+          }
 
           <!-- Thank you message -->
           <tr>

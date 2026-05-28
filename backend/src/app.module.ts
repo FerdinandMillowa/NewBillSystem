@@ -19,6 +19,7 @@ import { ActivityLogInterceptor } from './common/interceptors/activity-log.inter
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { FixedExpensesModule } from './fixed-expenses/fixed-expenses.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PaychanguModule } from './paychangu/paychangu.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     SuppliersModule,
     FixedExpensesModule,
     NotificationsModule,
+    PaychanguModule,
   ],
   controllers: [AppController],
   providers: [

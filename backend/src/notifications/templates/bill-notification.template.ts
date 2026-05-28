@@ -1,6 +1,7 @@
 const LOGO_URL = 'https://pitch-roll-bar-xyz123.vercel.app/logo.png';
 const BRAND_COLOR = '#1a1a2e';
 const ACCENT_COLOR = '#e94560';
+const BACKEND_URL = 'https://pitch-roll-backend.onrender.com';
 
 export interface BillNotificationData {
   customerFirstName: string;
@@ -47,6 +48,18 @@ export function buildBillNotificationHtml(data: BillNotificationData): string {
   const balanceColor = outstandingBalance > 0 ? '#dc2626' : '#16a34a';
   const balanceLabel =
     outstandingBalance > 0 ? 'Outstanding Balance' : 'Account Balance';
+
+  // Paychangu checkout link — pre-fills the outstanding balance but customer can change it
+  const payOnlineUrl =
+    `${BACKEND_URL}/paychangu/checkout` +
+    `?customerId=${encodeURIComponent(data.customerEmail)}` +
+    `&billId=${encodeURIComponent(billId)}` +
+    `&amount=${encodeURIComponent(outstandingBalance.toString())}`;
+
+  const payUrl =
+    `${BACKEND_URL}/paychangu/checkout` +
+    `?billId=${encodeURIComponent(billId)}` +
+    `&amount=${encodeURIComponent(Math.max(0, outstandingBalance).toString())}`;
 
   return `
 <!DOCTYPE html>
@@ -147,18 +160,75 @@ export function buildBillNotificationHtml(data: BillNotificationData): string {
             </td>
           </tr>
 
-          <!-- Message -->
+          ${
+            outstandingBalance > 0
+              ? `
+          <!-- Pay Online Button -->
           <tr>
-            <td style="padding:28px 40px 0;">
-              <p style="margin:0;font-size:14px;color:#6b7280;line-height:1.7;">
-                ${
-                  outstandingBalance > 0
-                    ? `To settle your balance, please visit Pitch &amp; Roll Bar or contact us directly. We accept cash, Mpamba, Airtel Money, and bank transfers.`
-                    : `Your account is fully settled. Thank you for your prompt payment!`
-                }
+            <td style="padding:24px 40px 0;text-align:center;">
+              <a href="${payUrl}"
+                 style="display:inline-block;background-color:#e94560;color:#ffffff;font-size:15px;font-weight:700;padding:14px 36px;border-radius:8px;text-decoration:none;letter-spacing:0.3px;">
+                Pay Online via Paychangu
+              </a>
+              <p style="margin:10px 0 0;font-size:12px;color:#9ca3af;">
+                You can adjust the amount on the payment page. Accepts Mpamba, Airtel Money, card &amp; bank transfer.
               </p>
             </td>
           </tr>
+
+          <!-- Payment Methods -->
+          <tr>
+            <td style="padding:24px 40px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+                <tr>
+                  <td style="padding:16px 24px;border-bottom:1px solid #e5e7eb;">
+                    <p style="margin:0;font-size:13px;font-weight:600;color:#374151;">Other Ways to Settle Your Balance</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 24px;border-bottom:1px solid #e5e7eb;">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding-right:12px;font-size:18px;">🏦</td>
+                        <td>
+                          <p style="margin:0;font-size:13px;font-weight:600;color:#374151;">National Bank of Malawi</p>
+                          <p style="margin:0;font-size:13px;color:#6b7280;">Account Number: <strong style="color:#111827;font-family:monospace;">1007565921</strong></p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 24px;border-bottom:1px solid #e5e7eb;">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding-right:12px;font-size:18px;">📱</td>
+                        <td>
+                          <p style="margin:0;font-size:13px;font-weight:600;color:#374151;">Mpamba</p>
+                          <p style="margin:0;font-size:13px;color:#6b7280;">Agent Code: <strong style="color:#111827;font-family:monospace;">122581</strong> &nbsp;·&nbsp; Agent Name: <strong style="color:#111827;">Pitch and Roll</strong></p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 24px;">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding-right:12px;font-size:18px;">📱</td>
+                        <td>
+                          <p style="margin:0;font-size:13px;font-weight:600;color:#374151;">Airtel Money</p>
+                          <p style="margin:0;font-size:13px;color:#6b7280;">Agent Code: <strong style="color:#111827;font-family:monospace;">788577</strong> &nbsp;·&nbsp; Agent Name: <strong style="color:#111827;">Pitch and Roll</strong></p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>`
+              : ''
+          }
 
           <!-- Footer -->
           <tr>
