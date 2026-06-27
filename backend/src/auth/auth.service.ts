@@ -130,12 +130,12 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('jwt.secret'),
-      expiresIn: this.configService.get<number>('jwt.expiresIn'), // Ensure expiresIn is a number
+      expiresIn: this.configService.get<number>('jwt.expiresIn'),
     });
 
     const refreshToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('jwt.refreshSecret'),
-      expiresIn: this.configService.get<number>('jwt.refreshExpiresIn'), // Ensure expiresIn is a number
+      expiresIn: this.configService.get<number>('jwt.refreshExpiresIn'),
     });
 
     // Hash and store refresh token

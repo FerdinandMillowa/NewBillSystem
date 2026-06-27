@@ -20,11 +20,11 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
-import { LogActivity } from '../common/decorators/log-activity.decorator'; // ADD THIS
+import { LogActivity } from '../common/decorators/log-activity.decorator';
 import {
   ActivityAction,
   ActivityEntity,
-} from '../database/entities/activity-log.entity'; // ADD THIS
+} from '../database/entities/activity-log.entity';
 
 @Controller('customers')
 @UseGuards(JwtAuthGuard, RolesGuard)

@@ -33,7 +33,6 @@ export class NotificationsService {
 
   /**
    * Send a bill notification email to the customer.
-   * Fails silently — a failed email never blocks the bill from being saved.
    */
   async sendBillNotification(data: BillNotificationData): Promise<void> {
     if (!this.resend) {
@@ -65,7 +64,6 @@ export class NotificationsService {
         `[Bill ${data.billId}] Notification sent to ${data.customerEmail} (Resend ID: ${result.data?.id})`,
       );
     } catch (err: any) {
-      // Silent failure — log but never throw so the caller is unaffected
       this.logger.error(
         `[Bill ${data.billId}] Failed to send notification to ${data.customerEmail}: ${err?.message ?? err}`,
       );
@@ -74,7 +72,6 @@ export class NotificationsService {
 
   /**
    * Send a payment verification confirmation email to the customer.
-   * Fails silently — a failed email never blocks the payment from being verified.
    */
   async sendPaymentNotification(data: PaymentNotificationData): Promise<void> {
     if (!this.resend) {

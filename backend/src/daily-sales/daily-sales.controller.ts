@@ -57,7 +57,7 @@ export class DailySalesController {
     return this.dailySalesService.getToday();
   }
 
-  // ✅ ADD THIS: Get or create draft for a specific date
+  // Get or create draft for a specific date
   @Get('draft/:date')
   async getOrCreateDraft(@Param('date') date: string) {
     return this.dailySalesService.getOrCreateDraftForDate(date);

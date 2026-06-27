@@ -72,10 +72,14 @@ export class PaychanguService {
           : 'Account balance payment',
         logo: 'https://pitch-roll-bar-xyz123.vercel.app/logo.png',
       },
-      meta: JSON.stringify({
+      // FIX: Paychangu expects meta as a native JSON object (per their docs
+      // example: { "uuid": "uuid", "response": "Response" }), not a
+      // stringified value. Sending JSON.stringify(...) here caused the API
+      // to reject the request with "The meta must be an array."
+      meta: {
         customerId: params.customerId,
         ...(params.billId && { billId: params.billId }),
-      }),
+      },
     };
 
     this.logger.log(
@@ -98,7 +102,9 @@ export class PaychanguService {
       this.logger.error(
         `Paychangu checkout initiation failed: ${JSON.stringify(data)}`,
       );
-      throw new Error(data?.message || 'Failed to initiate Paychangu checkout');
+      throw new Error(
+        data?.message || 'Failed to initiate Paychangu checkout',
+      );
     }
 
     const checkoutUrl: string =

@@ -16,11 +16,11 @@ import { AuthResponse } from './interfaces/auth-response.interface';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User } from '../database/entities/user.entity';
-import { LogActivity } from '../common/decorators/log-activity.decorator'; // ADD THIS
+import { LogActivity } from '../common/decorators/log-activity.decorator';
 import {
   ActivityAction,
   ActivityEntity,
-} from '../database/entities/activity-log.entity'; // ADD THIS
+} from '../database/entities/activity-log.entity';
 
 @Controller('auth')
 export class AuthController {
@@ -61,7 +61,7 @@ export class AuthController {
     @Body() refreshTokenDto: RefreshTokenDto,
     @Req() req: any,
   ): Promise<AuthResponse> {
-    // Extract user from token (you'll need to decode it)
+    // Extract user from token
     const decoded = this.authService['jwtService'].decode(
       refreshTokenDto.refreshToken,
     );

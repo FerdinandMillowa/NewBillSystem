@@ -39,14 +39,12 @@ export class BillsController {
   }
 
   // Get bill statistics (ANY authenticated user can view)
-  // FIXED: Removed @Roles(UserRole.ADMIN) decorator
   @Get('stats')
   getBillStats() {
     return this.billsService.getBillStats();
   }
 
   // Get recent bills (ANY authenticated user can view)
-  // FIXED: Removed @Roles(UserRole.ADMIN) decorator
   @Get('recent')
   getRecentBills(@Query('limit') limit?: number) {
     return this.billsService.getRecentBills(limit);
