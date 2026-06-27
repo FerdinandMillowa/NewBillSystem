@@ -97,7 +97,7 @@ export const EditProductModal = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["product-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["products-for-daily-sales"] }); // ✅ FIX: Keep DailySales cache fresh
+      queryClient.invalidateQueries({ queryKey: ["products-for-daily-sales"] });
       toast.success("Product updated successfully!");
       onClose();
     },
@@ -251,7 +251,7 @@ export const EditProductModal = ({
                     </div>
                   </div>
 
-                  {/* ✅ Bottle-to-Shot Conversion Setup - ONLY for Spirits 750ml */}
+                  {/* Bottle-to-Shot Conversion Setup - ONLY for Spirits 750ml */}
                   {showShotConversion && (
                     <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                       <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
@@ -310,7 +310,7 @@ export const EditProductModal = ({
                     </div>
                   )}
 
-                  {/* ✅ Info message when shot conversion is not available */}
+                  {/* Info message when shot conversion is not available */}
                   {product.unit === "bottle" && !showShotConversion && (
                     <div className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
                       <p className="text-sm text-gray-600 dark:text-gray-400">

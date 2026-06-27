@@ -23,7 +23,6 @@ export const DangerZoneSection = () => {
 
     setIsDeleting(true);
     try {
-      // In a real app, you would call an API endpoint here
       // await usersService.deleteAccount();
       toast.error("Account deletion is not implemented in this demo");
       setConfirmText("");
@@ -35,7 +34,6 @@ export const DangerZoneSection = () => {
   };
 
   const exportData = () => {
-    // In a real app, you would call an API endpoint here
     toast.success("Data export feature coming soon!");
   };
 

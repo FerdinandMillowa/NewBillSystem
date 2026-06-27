@@ -88,7 +88,7 @@ export const DailySales = () => {
         throw error;
       }
     },
-    enabled: !existingDailySales, // Only fetch when no current record exists
+    enabled: !existingDailySales,
   });
 
   // For display: Calculate how many days ago the nearest record was
@@ -102,9 +102,9 @@ export const DailySales = () => {
 
   // Fetch active products for initialization
   const { data: productsData } = useQuery({
-    queryKey: ["products", undefined, undefined], // ✅ Matches the key invalidated by EditProductModal
+    queryKey: ["products", undefined, undefined],
     queryFn: () => productsService.getAll({ isActive: true, limit: 100 }),
-    staleTime: 0, // ✅ Always re-fetch fresh data when navigating to this page
+    staleTime: 0,
   });
 
   // Calculate billsAmount from actual bills array
@@ -124,7 +124,7 @@ export const DailySales = () => {
       const product = productsData.products.find((p) => p.id === inv.productId);
       if (!product) return total;
 
-      // ✅ CRITICAL: Calculate sold quantity EXCLUDING conversions
+      // Calculate sold quantity EXCLUDING conversions
       const soldQuantity =
         inv.openingStock +
         inv.stockIn -
@@ -196,7 +196,6 @@ export const DailySales = () => {
           productName: inv.product?.name,
           unit: inv.product?.unit,
           categoryId: inv.product?.categoryId,
-          // ✅ NEW: Include conversion fields
           convertedOut: inv.convertedOut || 0,
           convertedIn: inv.convertedIn || 0,
         }))
@@ -269,7 +268,7 @@ export const DailySales = () => {
       );
     },
     onSuccess: () => {
-      // ✅ FIX: Force re-initialization by resetting the guard BEFORE invalidating.
+      // Force re-initialization by resetting the guard BEFORE invalidating.
       // The useEffect guard compares record ID — resetting it allows the effect
       // to re-run and reload inventories from the freshly fetched record.
       initializedRecordId.current = null;
@@ -329,10 +328,9 @@ export const DailySales = () => {
         initialInventories = nearestPreviousRecord.inventories.map(
           (inv: any) => ({
             productId: inv.productId,
-            openingStock: inv.closingStock, // Use closing stock from nearest previous
+            openingStock: inv.closingStock,
             stockIn: 0,
             closingStock: inv.closingStock,
-            // ✅ REMOVED: convertedOut and convertedIn
             // These are backend-only fields managed during conversions
           })
         );
@@ -346,7 +344,6 @@ export const DailySales = () => {
             openingStock: p.currentStock,
             stockIn: 0,
             closingStock: p.currentStock,
-            // ✅ REMOVED: convertedOut and convertedIn
           }));
       }
 
@@ -376,7 +373,7 @@ export const DailySales = () => {
   const handleSave = () => {
     if (!existingDailySales) return;
 
-    // ✅ FIX #1: Remove database-generated fields before sending to backend
+    // Remove database-generated fields before sending to backend
     const cleanInventories = inventories.map(
       ({
         soldQuantity, // Remove - calculated field
@@ -389,7 +386,7 @@ export const DailySales = () => {
       }) => rest
     );
 
-    // ✅ FIX #1: Strip database-generated fields from expenses
+    // Strip database-generated fields from expenses
     const cleanExpenses = expenses.map((exp) => ({
       category: exp.category,
       description: exp.description,
@@ -397,7 +394,7 @@ export const DailySales = () => {
       paymentMethod: exp.paymentMethod || "cash",
     }));
 
-    // ✅ FIX #1: Strip database-generated fields from stock purchases
+    // Strip database-generated fields from stock purchases
     const cleanStockPurchases = stockPurchases.map((sp) => ({
       productId: sp.productId,
       quantity: sp.quantity,

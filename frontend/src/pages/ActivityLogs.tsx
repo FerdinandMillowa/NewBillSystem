@@ -113,7 +113,7 @@ export const ActivityLogs = () => {
     },
     {
       name: "Active Users",
-      value: "N/A", // Can add user count if needed
+      value: "N/A",
       icon: UserGroupIcon,
       color: "bg-orange-500",
     },

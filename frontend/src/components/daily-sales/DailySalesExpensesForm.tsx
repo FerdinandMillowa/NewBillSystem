@@ -57,7 +57,7 @@ export const DailySalesExpensesForm = ({
     onExpensesChange(newExpenses);
   };
 
-  // ✅ FIX: Proper calculation with parseFloat to prevent NaN
+  // Proper calculation with parseFloat to prevent NaN
   const totalExpenses = expenses.reduce((sum, exp) => {
     const amount = parseFloat(String(exp.amount)) || 0;
     return sum + amount;

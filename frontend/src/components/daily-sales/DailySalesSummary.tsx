@@ -16,8 +16,7 @@ interface DailySalesSummaryProps {
     netRevenue: number;
     cashAtHand: number;
     inventories: DailyInventoryItem[];
-    actualCashCollected?: number | null; // ✅ Added — used to calculate shortage live
-  };
+    actualCashCollected?: number | null;
   billsAmount: number;
 }
 
@@ -25,7 +24,6 @@ export const DailySalesSummary = ({
   totals,
   billsAmount,
 }: DailySalesSummaryProps) => {
-  // ✅ Shortage is always calculated live: expected cash minus actual counted cash
   const shortage =
     totals.actualCashCollected != null
       ? Math.max(0, totals.cashAtHand - totals.actualCashCollected)
@@ -85,7 +83,7 @@ export const DailySalesSummary = ({
 
       {/* Additional Info */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* ✅ Shortage only shows when actual cash has been entered AND there is a shortage */}
+        {/* Shortage only shows when actual cash has been entered AND there is a shortage */}
         {shortage > 0 && (
           <Card className="bg-yellow-50 border border-yellow-200">
             <div className="flex items-center">

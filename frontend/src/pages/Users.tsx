@@ -26,8 +26,8 @@ export const Users = () => {
   // Filters and pagination
   const [filters, setFilters] = useState({
     search: "",
-    role: "", // Empty string means "all roles"
-    status: "", // Empty string means "all statuses"
+    role: "",
+    status: "",
     page: 1,
     limit: 10,
   });
@@ -43,11 +43,10 @@ export const Users = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // Fetch users - FIXED: Remove empty strings before sending to API
+  // Fetch users
   const { data: usersData, isLoading } = useQuery({
     queryKey: ["users", filters],
     queryFn: () => {
-      // Create a clean filters object, removing empty strings
       const apiFilters: any = {
         page: filters.page,
         limit: filters.limit,
@@ -58,12 +57,10 @@ export const Users = () => {
         apiFilters.search = filters.search;
       }
 
-      // Only include role if not empty (API expects lowercase enum values)
       if (filters.role) {
         apiFilters.role = filters.role.toLowerCase();
       }
 
-      // Only include status if not empty (API expects lowercase enum values)
       if (filters.status) {
         apiFilters.status = filters.status.toLowerCase();
       }

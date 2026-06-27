@@ -22,7 +22,7 @@ import {
 } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 
-// ✅ ADDED: Proper type definitions
+// Proper type definitions
 interface BaseNavItem {
   name: string;
   icon: React.ForwardRefExoticComponent<
@@ -142,7 +142,7 @@ interface SidebarProps {
   onDesktopToggle: () => void;
 }
 
-// ✅ CORRECT - Define component OUTSIDE main component
+// Define component OUTSIDE main component
 interface SidebarContentProps {
   isMobile?: boolean;
   navigation: NavItem[];

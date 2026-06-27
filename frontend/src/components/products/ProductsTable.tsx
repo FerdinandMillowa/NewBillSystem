@@ -90,7 +90,7 @@ export const ProductsTable = ({
           {products.map((product) => {
             const stockStatus = getStockStatus(product.currentStock);
 
-            // ✅ FIX: Only show "Needs Shot Link" for bottles in Spirits 750ml category
+            // Only show "Needs Shot Link" for bottles in Spirits 750ml category
             const needsShotLink =
               product.unit === "bottle" &&
               !product.linkedShotProductId &&
@@ -103,7 +103,7 @@ export const ProductsTable = ({
                     <div className="text-sm font-medium text-gray-900">
                       {formatProductName(product)}
                     </div>
-                    {/* ✅ Only show indicator for Spirits 750ml bottles without links */}
+                    {/* Only show indicator for Spirits 750ml bottles without links */}
                     {needsShotLink && (
                       <span className="inline-flex ml-2 px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
                         Needs Shot Link

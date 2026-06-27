@@ -34,7 +34,7 @@ export const DailySalesRevenueForm = ({
 
   return (
     <Card title="Income Avenue (Revenue Collection)">
-      {/* ✅ FIXED: Info Box with Correct Formula */}
+      {/* Info Box with Correct Formula */}
       <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
         <div className="flex items-start">
           <InformationCircleIcon className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />

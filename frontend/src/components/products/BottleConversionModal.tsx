@@ -100,12 +100,7 @@ export const BottleConversionModal = ({
   const shotsToAdd = quantity * (bottleProduct.shotsPerBottle || 0);
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Convert Bottles to Shots"
-      // icon prop removed - Modal doesn't accept it
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title="Convert Bottles to Shots">
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Bottle Info */}
         <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">

@@ -47,7 +47,6 @@ export const Login = () => {
 
   const handleForgotPassword = () => {
     toast.success("Password reset instructions sent to your email!");
-    // In a real app, you would implement actual password reset logic here
   };
 
   return (
@@ -57,7 +56,6 @@ export const Login = () => {
           {/* Logo/Title */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-600 rounded-full mb-4">
-              {/* Replace this SVG with your actual logo image */}
               <img
                 src="/logo.png"
                 alt="Bill Management Logo"

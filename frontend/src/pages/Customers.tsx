@@ -57,7 +57,6 @@ export const Customers = () => {
     queryKey: ["customers", filters],
     queryFn: () => customersService.getAll(cleanFilters(filters)),
     retry: (failureCount, error: any) => {
-      // Don't retry on 403 Forbidden
       if (error?.response?.status === 403) return false;
       return failureCount < 2;
     },

@@ -152,7 +152,7 @@ export const CreateBillModal = ({ isOpen, onClose }: CreateBillModalProps) => {
                     )}
                   </div>
 
-                  {/* Transaction Date - REMOVED helpText prop */}
+                  {/* Transaction Date */}
                   <Input
                     label="Transaction Date (Optional)"
                     type="date"

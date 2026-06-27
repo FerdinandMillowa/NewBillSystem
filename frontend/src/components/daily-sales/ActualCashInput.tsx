@@ -56,7 +56,7 @@ export const ActualCashInput = ({
     setIsEditing(false);
   };
 
-  // ✅ FIX: Calculate shortage based on actual vs expected
+  // Calculate shortage based on actual vs expected
   const parsedActualCash = actualCash ? parseFloat(actualCash) : null;
   const shortage =
     parsedActualCash !== null && currentCashAtHand > parsedActualCash

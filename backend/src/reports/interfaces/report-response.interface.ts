@@ -5,7 +5,7 @@ export interface DailySummary {
   totalPayments: number;
   paymentsAmount: number;
   totalExpenses: number;
-  stockPurchasesAmount?: number; // NEW
+  stockPurchasesAmount?: number;
   netRevenue: number;
 }
 
@@ -16,7 +16,7 @@ export interface MonthlySummary {
   totalPayments: number;
   paymentsAmount: number;
   totalExpenses: number;
-  totalStockPurchases?: number; // NEW
+  totalStockPurchases?: number;
   netRevenue: number;
 }
 
@@ -65,6 +65,6 @@ export interface DashboardStats {
     outstanding: number;
     collected: number;
     collectionRate: number;
-    totalStockPurchases?: number; // NEW
+    totalStockPurchases?: number;
   };
 }

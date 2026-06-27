@@ -73,7 +73,7 @@ export const Reports = () => {
     setSearchParams({ tab: activeTab });
   }, [activeTab, setSearchParams]);
 
-  // ── Customer Billing queries (unchanged) ─────────────────────────────
+  // Customer Billing queries 
   const { data: billingDashboardData } = useQuery({
     queryKey: ["billing-dashboard"],
     queryFn: () => reportsService.getDashboard(),
@@ -114,7 +114,7 @@ export const Reports = () => {
     queryFn: () => reportsService.getOverdueCustomers(5),
   });
 
-  // ── Daily Operations queries (unchanged) ─────────────────────────────
+  // Daily Operations queries 
   const { data: dailySalesSummary } = useQuery({
     queryKey: ["daily-sales-summary", dateRange],
     queryFn: () =>
@@ -175,7 +175,7 @@ export const Reports = () => {
     enabled: activeTab === "operations",
   });
 
-  // ── NEW: Business Position query ─────────────────────────────────────
+  // Business Position query
   const { data: profitLossData, isLoading: isProfitLossLoading } = useQuery({
     queryKey: ["profit-loss", dateRange],
     queryFn: () =>
@@ -183,7 +183,7 @@ export const Reports = () => {
     enabled: activeTab === "position",
   });
 
-  // ── NEW: Supplier Analytics query ────────────────────────────────────
+  // Supplier Analytics query
   const { data: supplierAnalytics, isLoading: isSupplierAnalyticsLoading } =
     useQuery({
       queryKey: ["supplier-analytics", dateRange],
@@ -195,7 +195,7 @@ export const Reports = () => {
       enabled: activeTab === "position",
     });
 
-  // ── Fixed Expenses state & query ─────────────────────────────────────
+  // Fixed Expenses state & query
   const emptyExpenseForm: CreateFixedExpenseDto = {
     category: "rent",
     description: "",
@@ -293,7 +293,7 @@ export const Reports = () => {
     setShowExpenseForm(false);
   };
 
-  // ── Tabs — added third and fourth tabs ─────────────────────────────────
+  // Tabs
   const tabs = [
     {
       id: "billing",
@@ -346,7 +346,7 @@ export const Reports = () => {
       paymentsAmount: item.paymentsAmount || 0,
     })) || [];
 
-  // ── renderBillingTab — completely unchanged ───────────────────────────
+  // renderBillingTab 
   const renderBillingTab = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -614,7 +614,7 @@ export const Reports = () => {
     </div>
   );
 
-  // ── renderOperationsTab — completely unchanged ────────────────────────
+  // renderOperationsTab
   const renderOperationsTab = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
@@ -1011,7 +1011,7 @@ export const Reports = () => {
       </Card>
     </div>
   );
-  // ── NEW: renderPositionTab ────────────────────────────────────────────
+  // renderPositionTab
   const renderPositionTab = () => {
     if (isProfitLossLoading) {
       return (
@@ -1036,7 +1036,7 @@ export const Reports = () => {
 
     return (
       <div className="space-y-6">
-        {/* ── Hero: Profit / Loss Banner ─────────────────────────────── */}
+        {/* Hero: Profit / Loss Banner */}
         <div
           className={`rounded-2xl p-8 text-white ${
             isProfit
@@ -1095,7 +1095,7 @@ export const Reports = () => {
           </div>
         </div>
 
-        {/* ── P&L Breakdown ──────────────────────────────────────────── */}
+        {/* P&L Breakdown */}
         <Card title="Profit & Loss Breakdown">
           <div className="space-y-3">
             {[
@@ -1179,7 +1179,7 @@ export const Reports = () => {
           </div>
         </Card>
 
-        {/* ── Where Is The Money? ────────────────────────────────────── */}
+        {/* Where Is The Money? */}
         <div>
           <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
             <WalletIcon className="w-5 h-5 mr-2 text-primary-600" />
@@ -1292,7 +1292,7 @@ export const Reports = () => {
           </div>
         </div>
 
-        {/* ── Supporting Detail Cards ────────────────────────────────── */}
+        {/* ── Supporting Detail Cards───── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-center">
             <p className="text-xs text-gray-500">Bills Raised (Period)</p>
@@ -1324,7 +1324,7 @@ export const Reports = () => {
           </div>
         </div>
 
-        {/* ── Daily Profit/Loss Trend Chart ──────────────────────────── */}
+        {/* Daily Profit/Loss Trend Chart  */}
         <Card title="Daily Profit / Loss Trend">
           {dailyBreakdown && dailyBreakdown.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
@@ -1375,7 +1375,7 @@ export const Reports = () => {
           )}
         </Card>
 
-        {/* ── Supplier Analytics ─────────────────────────────────── */}
+        {/* Supplier Analytics */}
         <div>
           <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
             <ShoppingBagIcon className="w-5 h-5 mr-2 text-primary-600" />
@@ -1869,8 +1869,7 @@ export const Reports = () => {
     );
   };
 
-  // ── Main return — only change is adding the fourth tab ────────────────
-  return (
+  // Main return
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -1888,7 +1887,7 @@ export const Reports = () => {
         </Button>
       </div>
 
-      {/* Date Range Filter — unchanged */}
+      {/* Date Range Filter */}
       <Card>
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
           <div className="flex items-center space-x-2">

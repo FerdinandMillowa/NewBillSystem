@@ -36,7 +36,7 @@ export const formatPercentage = (value: number): string => {
   return `${value.toFixed(2)}%`;
 };
 
-// ✅ UPDATED: Added null safety to formatCustomerName
+// Added null safety to formatCustomerName
 export const formatCustomerName = (
   firstName?: string | null,
   lastName?: string | null

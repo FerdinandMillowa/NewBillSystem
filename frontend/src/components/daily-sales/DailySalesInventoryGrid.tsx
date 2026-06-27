@@ -96,8 +96,6 @@ export const DailySalesInventoryGrid = ({
       }
     );
   };
-
-  // ✅ FIX: Exclude convertedOut from sold quantity so converted bottles
   // don't generate revenue in the grid display.
   const calculateSoldQuantity = (inv: DailyInventoryItem): number => {
     const rawSold = inv.openingStock + inv.stockIn - inv.closingStock;
@@ -228,7 +226,7 @@ export const DailySalesInventoryGrid = ({
                             <td className="px-4 py-3 text-center text-sm">
                               {inv.openingStock + inv.stockIn}
                             </td>
-                            {/* ✅ FIX: Converted column — read-only, shows convertedOut */}
+                            {/* Converted column — read-only, shows convertedOut */}
                             <td className="px-4 py-3 text-center text-sm text-orange-600 font-medium">
                               {convertedOut > 0 ? convertedOut : "—"}
                             </td>

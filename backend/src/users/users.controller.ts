@@ -45,7 +45,6 @@ export class UsersController {
     @Body() updateUserDto: UpdateUserDto,
   ) {
     // Users can only update their own username, email, and fullName
-    // Remove sensitive fields that users shouldn't change themselves
     const { role, status, password, ...allowedUpdates } = updateUserDto;
     return this.usersService.update(currentUser.id, allowedUpdates);
   }

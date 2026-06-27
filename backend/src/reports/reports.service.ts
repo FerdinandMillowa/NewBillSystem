@@ -223,7 +223,7 @@ export class ReportsService {
     };
   }
 
-  // NEW METHOD: Get billing payment methods (from payments table)
+  // Get billing payment methods (from payments table)
   async getBillingPaymentMethods(dateRangeDto?: DateRangeDto): Promise<any> {
     let startDate: Date;
     let endDate: Date;
@@ -372,7 +372,6 @@ export class ReportsService {
 
   /**
    * Get monthly billing report (Bills & Payments, not Daily Sales)
-   * This is specifically for the Customer Billing module
    */
   async getMonthlyBillingReport(dateRangeDto?: DateRangeDto): Promise<any> {
     let startDate: Date;
@@ -395,7 +394,7 @@ export class ReportsService {
       order: { transactionDate: 'ASC' },
     });
 
-    // Get all payments in date range (using createdAt - Payment entity doesn't have paymentDate field)
+    // Get all payments in date range
     const payments = await this.paymentRepository.find({
       where: {
         createdAt: Between(startDate, endDate),
@@ -541,7 +540,6 @@ export class ReportsService {
 
   /**
    * Get top payers (customers with highest total payments)
-   * This is the same as getTopCustomers but with more details
    */
   async getTopPayers(limit = 5): Promise<any[]> {
     const customers = await this.customerRepository.find({
@@ -593,7 +591,6 @@ export class ReportsService {
     startDate?: string,
     endDate?: string,
   ): Promise<any> {
-    // FIX: Add default date range if not provided
     let finalStartDate: Date;
     let finalEndDate: Date;
 
@@ -647,7 +644,6 @@ export class ReportsService {
   }
 
   async getCategorySales(startDate?: string, endDate?: string): Promise<any> {
-    // FIX: Add default date range if not provided
     let finalStartDate: Date;
     let finalEndDate: Date;
 
@@ -696,7 +692,6 @@ export class ReportsService {
   }
 
   async getExpenseAnalysis(startDate?: string, endDate?: string): Promise<any> {
-    // FIX: Add default date range if not provided
     let finalStartDate: Date;
     let finalEndDate: Date;
 
@@ -708,8 +703,6 @@ export class ReportsService {
       finalEndDate = new Date();
       finalStartDate = subDays(finalEndDate, 30);
     }
-
-    // AFTER (with transaction_date column) - direct query
     const expenses = await this.dailyExpenseRepository
       .createQueryBuilder('de')
       .where('de.transaction_date BETWEEN :start AND :end', {
@@ -740,7 +733,6 @@ export class ReportsService {
     startDate?: string,
     endDate?: string,
   ): Promise<any> {
-    // FIX: Add default date range if not provided
     let finalStartDate: Date;
     let finalEndDate: Date;
 
@@ -805,7 +797,6 @@ export class ReportsService {
     startDate?: string,
     endDate?: string,
   ): Promise<any> {
-    // FIX: Add default date range if not provided
     let finalStartDate: Date;
     let finalEndDate: Date;
 
@@ -924,7 +915,6 @@ export class ReportsService {
 
   /**
    * Daily sales summary for a date range (used by Reports controller)
-   * This now includes stock purchases (separate from other expenses) and subtracts them from netRevenue.
    */
   async getDailySalesSummary(
     startDate?: string,
@@ -945,7 +935,6 @@ export class ReportsService {
     const start = parsedStart;
     const end = parsedEnd;
 
-    // OPTIMIZATION 1: Fetch daily sales WITHOUT relations first (faster query)
     const dailySalesRecords = await this.dailySalesRepository.find({
       where: {
         date: Between(start, end),
@@ -1071,12 +1060,12 @@ export class ReportsService {
       : startOfDay(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
     const parsedEnd = endDate ? endOfDay(parseISO(endDate)) : endOfDay(now);
 
-    // ── 1. Pull all daily sales records in range ──────────────────────────
+    // ── 1. Pull all daily sales records in range
     const dailySalesRecords = await this.dailySalesRepository.find({
       where: { date: Between(parsedStart, parsedEnd) },
     });
 
-    // ── 2. Pull all stock purchases in range ─────────────────────────────
+    // ── 2. Pull all stock purchases in range
     const stockPurchases = await this.stockPurchaseRepository
       .createQueryBuilder('sp')
       .where('sp.transaction_date BETWEEN :start AND :end', {
@@ -1085,7 +1074,7 @@ export class ReportsService {
       })
       .getMany();
 
-    // ── 3. Pull all bill payments received in range ───────────────────────
+    // ── 3. Pull all bill payments received in range
     const billPaymentsReceived = await this.paymentRepository
       .createQueryBuilder('payment')
       .where('payment.createdAt BETWEEN :start AND :end', {
@@ -1094,7 +1083,7 @@ export class ReportsService {
       })
       .getMany();
 
-    // ── 4. Pull all bills created in range ────────────────────────────────
+    // ── 4. Pull all bills created in range
     const billsInRange = await this.billRepository
       .createQueryBuilder('bill')
       .where('bill.transaction_date BETWEEN :start AND :end', {
@@ -1103,7 +1092,7 @@ export class ReportsService {
       })
       .getMany();
 
-    // ── 5. Aggregate daily sales figures ─────────────────────────────────
+    // ── 5. Aggregate daily sales figures
     let totalSales = 0;
     let totalExpenses = 0;
     let totalCashCollected = 0;
@@ -1162,7 +1151,7 @@ export class ReportsService {
     );
     const totalFixedExpenses = parseFloat(fixedExpenses[0]?.total || '0');
 
-    // ── 9. Profit / Loss calculations ────────────────────────────────────
+    // ── 9. Profit / Loss calculations ────
     // Gross profit = sales minus operating expenses
     const grossProfit = totalSales - totalExpenses;
 
@@ -1174,7 +1163,7 @@ export class ReportsService {
 
     const isProfit = trueNetProfit >= 0;
 
-    // ── 10. Where is the money? ───────────────────────────────────────────
+    // ── 10. Where is the money? ───────────
     // Cash at hand = cash collected from sales minus cash spent on stock
     const cashAtHand = totalCashCollected - cashStockPurchases;
 

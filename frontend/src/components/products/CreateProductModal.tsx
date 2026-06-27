@@ -222,7 +222,7 @@ export const CreateProductModal = ({
           placeholder="0"
         />
 
-        {/* ✅ Bottle-Specific Fields - ONLY for Spirits 750ml */}
+        {/* Bottle-Specific Fields - ONLY for Spirits 750ml */}
         {showShotConversion && (
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
             <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
@@ -280,7 +280,7 @@ export const CreateProductModal = ({
           </div>
         )}
 
-        {/* ✅ Info message when shot conversion is not available */}
+        {/* Info message when shot conversion is not available */}
         {formData.unit === "bottle" &&
           !showShotConversion &&
           formData.categoryId && (

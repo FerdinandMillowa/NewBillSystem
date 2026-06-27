@@ -209,7 +209,6 @@ export class PaychanguService {
       this.logger.warn(
         'PAYCHANGU_WEBHOOK_SECRET not set — skipping signature validation',
       );
-      // Allow through but log — better than silently failing in dev
       return true;
     }
 

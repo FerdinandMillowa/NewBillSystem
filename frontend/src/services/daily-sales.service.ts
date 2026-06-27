@@ -37,19 +37,19 @@ export const dailySalesService = {
     return response.data;
   },
 
-  // ✅ NEW: Get or create draft daily sales for a date
+  // Get or create draft daily sales for a date
   getOrCreateDraft: async (date: string) => {
     const response = await api.get(`/daily-sales/draft/${date}`);
     return response.data;
   },
 
-  // ✅ NEW: Get nearest finalized record before a date
+  // Get nearest finalized record before a date
   getNearestBefore: async (date: string) => {
     const response = await api.get(`/daily-sales/nearest-before/${date}`);
     return response.data;
   },
 
-  // UPDATED: Get bills for a specific date with optional dailySalesId
+  // Get bills for a specific date with optional dailySalesId
   getBillsForDate: async (date: string, dailySalesId?: string) => {
     const params: any = { date };
     if (dailySalesId) {
@@ -81,7 +81,7 @@ export const dailySalesService = {
     return response.data;
   },
 
-  // ✅ ADDED: Update actual cash collected
+  // Update actual cash collected
   updateActualCashCollected: async (id: string, actualCashCollected: number | null) => {
     const response = await api.patch(`/daily-sales/${id}/actual-cash`, { actualCashCollected });
     return response.data;

@@ -85,9 +85,6 @@ export class PaymentsService {
 
     // Warn if payment exceeds outstanding balance (allowed but noted)
     if (amount > outstandingBalance) {
-      // You can choose to throw an error or allow overpayment
-      // For now, we'll allow it but you can uncomment the line below to prevent it
-      // throw new BadRequestException(`Payment amount (${amount}) exceeds outstanding balance (${outstandingBalance})`);
     }
 
     // Auto-verify: admin recording a cash payment is verified immediately

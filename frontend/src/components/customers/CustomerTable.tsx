@@ -5,7 +5,7 @@ import {
   formatPhoneNumber,
   getStatusBadgeColor,
   formatCurrency,
-} from "../../utils/formatters"; // added formatCurrency
+} from "../../utils/formatters";
 import { Link } from "react-router-dom";
 import {
   CheckCircleIcon,
@@ -200,7 +200,7 @@ export const CustomerTable = ({
         </table>
       </div>
 
-      {/* Pagination (unchanged) */}
+      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
           <div className="text-sm text-gray-700">

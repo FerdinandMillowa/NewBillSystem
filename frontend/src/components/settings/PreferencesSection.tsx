@@ -1,7 +1,3 @@
-// ============================================
-// src/components/settings/PreferencesSection.tsx
-// ============================================
-
 import { useState, useEffect } from "react";
 import { settingsService } from "../../services/settings.service";
 import type { SystemPreferences } from "../../types/settings.types";

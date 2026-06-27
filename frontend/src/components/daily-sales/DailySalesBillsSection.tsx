@@ -20,7 +20,7 @@ interface DailySalesBillsSectionProps {
   billsAmount: number;
   isDisabled?: boolean;
   onBillCreated: () => void;
-  existingDailySales?: any; // ✅ ADD THIS
+  existingDailySales?: any;
 }
 
 export const DailySalesBillsSection = ({
@@ -29,7 +29,7 @@ export const DailySalesBillsSection = ({
   billsAmount,
   isDisabled = false,
   onBillCreated,
-  existingDailySales, // ✅ ADD THIS
+  existingDailySales,
 }: DailySalesBillsSectionProps) => {
   const queryClient = useQueryClient();
   const [showBillForm, setShowBillForm] = useState(false);
@@ -49,10 +49,9 @@ export const DailySalesBillsSection = ({
       }),
   });
 
-  // ✅ FIXED: Create bill mutation - ONLY works if daily sales record exists
+  // Create bill mutation - ONLY works if daily sales record exists
   const createBillMutation = useMutation({
     mutationFn: async (data: any) => {
-      // ✅ FIX: Only create bill if daily sales record EXISTS
       // Do NOT auto-create draft
       try {
         const dailySales = await dailySalesService.getByDate(selectedDate);
@@ -71,7 +70,7 @@ export const DailySalesBillsSection = ({
       }
     },
     onSuccess: () => {
-      // ✅ FIX #6: Only invalidate what changed
+      // Only invalidate what changed
       queryClient.invalidateQueries({
         queryKey: ["daily-sales-by-date", selectedDate],
       });
@@ -110,7 +109,7 @@ export const DailySalesBillsSection = ({
     });
   };
 
-  // ✅ CRITICAL FIX: Helper function to safely get customer name
+  // Helper function to safely get customer name
   const getCustomerName = (customer: any): string => {
     if (!customer) return "Unknown Customer";
     const firstName = customer.firstName || "";
@@ -137,7 +136,7 @@ export const DailySalesBillsSection = ({
           </p>
         </div>
       </div>
-      {/* ✅ FIXED: Existing Bills List with proper null safety */}
+      {/* Existing Bills List with proper null safety */}
       {billsForDate && billsForDate.length > 0 ? (
         <div className="space-y-2 mb-4">
           {billsForDate.map((bill: any) => (
@@ -148,7 +147,7 @@ export const DailySalesBillsSection = ({
               <div className="flex-1">
                 <div className="flex items-center">
                   <UserIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
-                  {/* ✅ CRITICAL FIX: Use helper function with null safety */}
+                  {/* Use helper function with null safety */}
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
                     {getCustomerName(bill.customer)}
                   </p>
@@ -179,7 +178,7 @@ export const DailySalesBillsSection = ({
 
       {/* Add Bill Button/Form - ONLY show if daily sales record exists */}
       {!isDisabled &&
-        existingDailySales && ( // ✅ ADD existingDailySales check
+        existingDailySales && ( // existingDailySales check
           <>
             {!showBillForm ? (
               <Button
@@ -289,7 +288,7 @@ export const DailySalesBillsSection = ({
           </>
         )}
 
-      {/* ✅ ADD: Show message if no record exists */}
+      {/* Show message if no record exists */}
       {!isDisabled && !existingDailySales && (
         <div className="text-center py-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-sm text-yellow-800">

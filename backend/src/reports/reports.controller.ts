@@ -80,7 +80,7 @@ export class ReportsController {
     return this.reportsService.getCustomersWithOverdueBalances(limit);
   }
 
-  // ── NEW: Profit / Loss & Business Position report ──────────────────────
+  //Profit / Loss & Business Position report ──────────────────────
   @Get('profit-loss')
   getProfitLossReport(
     @Query('startDate') startDate?: string,
@@ -89,7 +89,7 @@ export class ReportsController {
     return this.reportsService.getProfitLossReport(startDate, endDate);
   }
 
-  // ── NEW: Supplier Analytics ────────────────────────────────────────────
+  //Supplier Analytics ────────────────────────────────────────────
   @Get('supplier-analytics')
   getSupplierAnalytics(
     @Query('startDate') startDate?: string,

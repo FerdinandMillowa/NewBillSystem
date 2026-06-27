@@ -68,28 +68,27 @@ export const Dashboard = () => {
 
   const { data: recentBills } = useQuery({
     queryKey: ["recent-bills"],
-    queryFn: () => billsService.getRecent(3), // ← Changed from 5 to 3
+    queryFn: () => billsService.getRecent(3),
   });
 
   const { data: recentPayments } = useQuery({
     queryKey: ["recent-payments"],
-    queryFn: () => paymentsService.getRecent(3), // ← Changed from 5 to 3
+    queryFn: () => paymentsService.getRecent(3),
   });
 
-  // FIX APPLIED IN reports.service.ts: This call now defaults to a valid date range.
   // CUSTOMER BILLING: Get monthly billing data (bills & payments)
   const { data: monthlyBillingData } = useQuery({
     queryKey: ["monthly-billing-report"],
     queryFn: () => reportsService.getMonthlyBilling(),
   });
 
-  // UPDATED: Now using billing payment methods (from payments table)
+  // billing payment methods (from payments table)
   const { data: billingPaymentMethods } = useQuery({
     queryKey: ["billing-payment-methods"],
     queryFn: () => reportsService.getBillingPaymentMethods(),
   });
 
-  // NEW: Daily Operations queries - Get weekly summary
+  // Daily Operations queries - Get weekly summary
   const { data: dailySalesSummary } = useQuery({
     queryKey: ["daily-sales-summary"],
     queryFn: () => (reportsService.getDailySalesSummary as any)(),
@@ -204,7 +203,7 @@ export const Dashboard = () => {
   // Prepare chart data for Customer Billing Module
   const monthlyChartData =
     monthlyBillingData?.map((item: any) => ({
-      month: item.month.substring(5), // Get MM from YYYY-MM
+      month: item.month.substring(5),
       billsAmount: item.billsAmount || 0,
       paymentsAmount: item.paymentsAmount || 0,
     })) || [];
@@ -341,7 +340,7 @@ export const Dashboard = () => {
             )}
           </Card>
 
-          {/* Payment Methods Chart - NOW SHOWS BILLING PAYMENTS */}
+          {/* Payment Methods Chart */}
           <Card title="Payment Methods Distribution (All Payments)">
             {paymentMethodChartData && paymentMethodChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
@@ -474,7 +473,7 @@ export const Dashboard = () => {
         </div>
       </div>
 
-      {/* =============== UPDATED: Daily Operations Module - 7 Day Summary =============== */}
+      {/* =============== Daily Operations Module - 7 Day Summary =============== */}
       {/* Daily Operations */}
       <Card>
         <div className="flex items-center justify-between mb-6">
@@ -606,7 +605,7 @@ export const Dashboard = () => {
           </div>
         )}
       </Card>
-      {/* =============== END UPDATED: Daily Operations Module =============== */}
+      {/* =============== END: Daily Operations Module =============== */}
     </div>
   );
 };

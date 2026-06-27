@@ -99,7 +99,7 @@ export const reportsService = {
     return data;
   },
 
-  // ── NEW: Profit / Loss & Business Position ────────────────────────────
+  //  Profit / Loss & Business Position 
   getProfitLoss: async (startDate: string, endDate: string) => {
     const { data } = await api.get('/reports/profit-loss', {
       params: { startDate, endDate },
@@ -107,7 +107,7 @@ export const reportsService = {
     return data;
   },
 
-  // ── NEW: Supplier Analytics ───────────────────────────────────────────
+  // Supplier Analytics 
   getSupplierAnalytics: async (startDate?: string, endDate?: string) => {
     const { data } = await api.get('/reports/supplier-analytics', {
       params: { startDate, endDate },

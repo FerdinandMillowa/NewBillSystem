@@ -21,7 +21,6 @@ export interface DailyInventoryItem {
   openingStock: number;
   stockIn: number;
   closingStock: number;
-  // ✅ ADDED: Missing properties used in DailySales.tsx
   convertedOut?: number;
   convertedIn?: number;
   soldQuantity?: number;
