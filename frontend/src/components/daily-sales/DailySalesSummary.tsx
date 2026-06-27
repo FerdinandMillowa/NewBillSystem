@@ -17,6 +17,7 @@ interface DailySalesSummaryProps {
     cashAtHand: number;
     inventories: DailyInventoryItem[];
     actualCashCollected?: number | null;
+  };
   billsAmount: number;
 }
 

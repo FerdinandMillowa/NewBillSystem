@@ -73,7 +73,7 @@ export const Reports = () => {
     setSearchParams({ tab: activeTab });
   }, [activeTab, setSearchParams]);
 
-  // Customer Billing queries 
+  // Customer Billing queries
   const { data: billingDashboardData } = useQuery({
     queryKey: ["billing-dashboard"],
     queryFn: () => reportsService.getDashboard(),
@@ -114,7 +114,7 @@ export const Reports = () => {
     queryFn: () => reportsService.getOverdueCustomers(5),
   });
 
-  // Daily Operations queries 
+  // Daily Operations queries
   const { data: dailySalesSummary } = useQuery({
     queryKey: ["daily-sales-summary", dateRange],
     queryFn: () =>
@@ -346,7 +346,7 @@ export const Reports = () => {
       paymentsAmount: item.paymentsAmount || 0,
     })) || [];
 
-  // renderBillingTab 
+  // renderBillingTab
   const renderBillingTab = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -1870,6 +1870,7 @@ export const Reports = () => {
   };
 
   // Main return
+  return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
