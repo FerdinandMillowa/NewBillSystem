@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { billsService } from "../services/bills.service";
@@ -7,6 +8,9 @@ import { Button } from "../components/ui/Button";
 import { CreateBillModal } from "../components/bills/CreateBillModal";
 import { BillTable } from "../components/bills/BillTable";
 import { BillFilters } from "../components/bills/BillFilters";
+import { ExportButton } from "../components/ui/ExportButton";
+import { useExport } from "../hooks/useExport";
+import type { ExportFormat } from "../hooks/useExport";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import {
@@ -15,7 +19,53 @@ import {
   CurrencyDollarIcon,
   ChartBarIcon,
 } from "@heroicons/react/24/outline";
-import { formatCurrency } from "../utils/formatters";
+import {
+  formatCurrency,
+  formatDate,
+  formatCustomerName,
+} from "../utils/formatters";
+
+// Column definitions for all three export formats
+const BILL_EXPORT_COLUMNS = [
+  {
+    header: "Bill ID",
+    accessor: (b: Bill) => `#${b.id.substring(0, 8).toUpperCase()}`,
+    width: 14,
+  },
+  {
+    header: "Customer",
+    accessor: (b: Bill) =>
+      b.customer
+        ? formatCustomerName(b.customer.firstName, b.customer.lastName)
+        : "Unknown",
+    width: 24,
+  },
+  {
+    header: "Email",
+    accessor: (b: Bill) => b.customer?.email ?? "—",
+    width: 28,
+  },
+  {
+    header: "Description",
+    accessor: (b: Bill) => b.description,
+    width: 32,
+  },
+  {
+    header: "Amount (MWK)",
+    accessor: (b: Bill) => parseFloat(b.amount.toString()),
+    width: 16,
+  },
+  {
+    header: "Transaction Date",
+    accessor: (b: Bill) => formatDate(b.transactionDate),
+    width: 18,
+  },
+  {
+    header: "Created On",
+    accessor: (b: Bill) => formatDate(b.createdAt),
+    width: 16,
+  },
+];
 
 export const Bills = () => {
   const { isAdmin } = useAuth();
@@ -29,21 +79,17 @@ export const Bills = () => {
   });
 
   // Clean filters helper - removes empty strings
-  const cleanFilters = (filters: any) => {
+  const cleanFilters = (f: any) => {
     const cleaned: any = {};
-    Object.keys(filters).forEach((key) => {
-      if (
-        filters[key] !== "" &&
-        filters[key] !== null &&
-        filters[key] !== undefined
-      ) {
-        cleaned[key] = filters[key];
+    Object.keys(f).forEach((key) => {
+      if (f[key] !== "" && f[key] !== null && f[key] !== undefined) {
+        cleaned[key] = f[key];
       }
     });
     return cleaned;
   };
 
-  // Fetch bills
+  // Fetch bills (paginated — current view)
   const { data, isLoading, error } = useQuery({
     queryKey: ["bills", filters],
     queryFn: () => billsService.getAll(cleanFilters(filters)),
@@ -62,6 +108,40 @@ export const Bills = () => {
       return failureCount < 2;
     },
   });
+
+  // Export hook
+  const { exportData, isExporting } = useExport<Bill>({
+    title: buildExportTitle(filters),
+    columns: BILL_EXPORT_COLUMNS,
+    filename: buildExportFilename(filters),
+  });
+
+  // Handle export — fetch ALL records matching current filters (no pagination)
+  const handleExport = async (format: ExportFormat) => {
+    try {
+      const exportFilters = {
+        ...cleanFilters(filters),
+        page: 1,
+        limit: 99999,
+      };
+      const result = await billsService.getAll(exportFilters);
+      const allBills: Bill[] = result?.bills ?? [];
+
+      if (allBills.length === 0) {
+        toast.error("No bills to export with the current filters.");
+        return;
+      }
+
+      await exportData(allBills, format);
+      toast.success(
+        `Exported ${allBills.length} bill${
+          allBills.length !== 1 ? "s" : ""
+        } as ${format.toUpperCase()}`
+      );
+    } catch {
+      toast.error("Export failed. Please try again.");
+    }
+  };
 
   // Delete bill mutation
   const deleteMutation = useMutation({
@@ -181,14 +261,22 @@ export const Bills = () => {
             Manage customer bills and invoices
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center"
-        >
-          <PlusIcon className="w-5 h-5 mr-2" />
-          Create Bill
-        </Button>
+        <div className="flex items-center gap-3">
+          <ExportButton
+            onExport={handleExport}
+            isExporting={isExporting}
+            isDisabled={isLoading || !data?.total}
+            recordCount={data?.total}
+          />
+          <Button
+            variant="primary"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center"
+          >
+            <PlusIcon className="w-5 h-5 mr-2" />
+            Create Bill
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -238,3 +326,19 @@ export const Bills = () => {
     </div>
   );
 };
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function buildExportTitle(filters: { customerId: string; search: string }) {
+  const parts: string[] = ["Bills"];
+  if (filters.search) {
+    parts.push(`— Search: "${filters.search}"`);
+  }
+  return parts.join(" ");
+}
+
+function buildExportFilename(filters: { customerId: string; search: string }) {
+  const date = new Date().toISOString().slice(0, 10);
+  const suffix = filters.customerId ? "-filtered" : "";
+  return `bills${suffix}-${date}`;
+}

@@ -8,6 +8,9 @@ import { Button } from "../components/ui/Button";
 import { CreatePaymentModal } from "../components/payments/CreatePaymentModal";
 import { PaymentTable } from "../components/payments/PaymentTable";
 import { PaymentFilters } from "../components/payments/PaymentFilters";
+import { ExportButton } from "../components/ui/ExportButton";
+import { useExport } from "../hooks/useExport";
+import type { ExportFormat } from "../hooks/useExport";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import {
@@ -17,7 +20,65 @@ import {
   ChartBarIcon,
   BanknotesIcon,
 } from "@heroicons/react/24/outline";
-import { formatCurrency } from "../utils/formatters";
+import {
+  formatCurrency,
+  formatDate,
+  formatCustomerName,
+  getPaymentMethodLabel,
+} from "../utils/formatters";
+
+// Column definitions for all three export formats
+const PAYMENT_EXPORT_COLUMNS = [
+  {
+    header: "Payment ID",
+    accessor: (p: Payment) => `#${p.id.substring(0, 8).toUpperCase()}`,
+    width: 14,
+  },
+  {
+    header: "Customer",
+    accessor: (p: Payment) =>
+      p.customer
+        ? formatCustomerName(p.customer.firstName, p.customer.lastName)
+        : "Unknown",
+    width: 24,
+  },
+  {
+    header: "Method",
+    accessor: (p: Payment) => getPaymentMethodLabel(p.paymentMethod),
+    width: 16,
+  },
+  {
+    header: "Amount (MWK)",
+    accessor: (p: Payment) => parseFloat(p.amount.toString()),
+    width: 16,
+  },
+  {
+    header: "Reference No.",
+    accessor: (p: Payment) => p.referenceNumber ?? "—",
+    width: 20,
+  },
+  {
+    header: "Status",
+    accessor: (p: Payment) =>
+      p.paymentStatus === "verified" ? "Verified" : "Pending",
+    width: 12,
+  },
+  {
+    header: "Notes",
+    accessor: (p: Payment) => p.notes ?? "—",
+    width: 28,
+  },
+  {
+    header: "Payment Date",
+    accessor: (p: Payment) => (p.paymentDate ? formatDate(p.paymentDate) : "—"),
+    width: 16,
+  },
+  {
+    header: "Recorded On",
+    accessor: (p: Payment) => formatDate(p.createdAt),
+    width: 16,
+  },
+];
 
 export const Payments = () => {
   const { isAdmin } = useAuth();
@@ -32,21 +93,17 @@ export const Payments = () => {
   });
 
   // Clean filters helper - removes empty strings
-  const cleanFilters = (filters: any) => {
+  const cleanFilters = (f: any) => {
     const cleaned: any = {};
-    Object.keys(filters).forEach((key) => {
-      if (
-        filters[key] !== "" &&
-        filters[key] !== null &&
-        filters[key] !== undefined
-      ) {
-        cleaned[key] = filters[key];
+    Object.keys(f).forEach((key) => {
+      if (f[key] !== "" && f[key] !== null && f[key] !== undefined) {
+        cleaned[key] = f[key];
       }
     });
     return cleaned;
   };
 
-  // Fetch payments
+  // Fetch paginated payments (current page view)
   const { data, isLoading, error } = useQuery({
     queryKey: ["payments", filters],
     queryFn: () => paymentsService.getAll(cleanFilters(filters)),
@@ -65,6 +122,40 @@ export const Payments = () => {
       return failureCount < 2;
     },
   });
+
+  // Export hook
+  const { exportData, isExporting } = useExport<Payment>({
+    title: buildExportTitle(filters),
+    columns: PAYMENT_EXPORT_COLUMNS,
+    filename: buildExportFilename(filters),
+  });
+
+  // Handle export — fetch ALL records matching current filters (no pagination limit)
+  const handleExport = async (format: ExportFormat) => {
+    try {
+      const exportFilters = {
+        ...cleanFilters(filters),
+        page: 1,
+        limit: 99999, // fetch everything matching current filters
+      };
+      const result = await paymentsService.getAll(exportFilters);
+      const allPayments: Payment[] = result?.payments ?? [];
+
+      if (allPayments.length === 0) {
+        toast.error("No payments to export with the current filters.");
+        return;
+      }
+
+      await exportData(allPayments, format);
+      toast.success(
+        `Exported ${allPayments.length} payment${
+          allPayments.length !== 1 ? "s" : ""
+        } as ${format.toUpperCase()}`
+      );
+    } catch {
+      toast.error("Export failed. Please try again.");
+    }
+  };
 
   // Delete payment mutation
   const deleteMutation = useMutation({
@@ -214,14 +305,22 @@ export const Payments = () => {
             Record and manage customer payments
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center"
-        >
-          <PlusIcon className="w-5 h-5 mr-2" />
-          Record Payment
-        </Button>
+        <div className="flex items-center gap-3">
+          <ExportButton
+            onExport={handleExport}
+            isExporting={isExporting}
+            isDisabled={isLoading || !data?.total}
+            recordCount={data?.total}
+          />
+          <Button
+            variant="primary"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center"
+          >
+            <PlusIcon className="w-5 h-5 mr-2" />
+            Record Payment
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -306,3 +405,30 @@ export const Payments = () => {
     </div>
   );
 };
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function buildExportTitle(filters: {
+  paymentMethod: string;
+  customerId: string;
+  search: string;
+}) {
+  const parts: string[] = ["Payments"];
+  if (filters.paymentMethod) {
+    parts.push(`— ${getPaymentMethodLabel(filters.paymentMethod)}`);
+  }
+  if (filters.search) {
+    parts.push(`— Search: "${filters.search}"`);
+  }
+  return parts.join(" ");
+}
+
+function buildExportFilename(filters: {
+  paymentMethod: string;
+  customerId: string;
+  search: string;
+}) {
+  const date = new Date().toISOString().slice(0, 10);
+  const method = filters.paymentMethod ? `-${filters.paymentMethod}` : "";
+  return `payments${method}-${date}`;
+}
