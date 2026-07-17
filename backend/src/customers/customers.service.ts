@@ -28,7 +28,6 @@ export class CustomersService {
   async create(createCustomerDto: CreateCustomerDto): Promise<Customer> {
     const { email, phone } = createCustomerDto;
 
-    // Check if customer already exists
     const existingCustomer = await this.customerRepository.findOne({
       where: [{ email }, { phone }],
     });
@@ -39,7 +38,6 @@ export class CustomersService {
       );
     }
 
-    // Create customer with pending status
     const customer = this.customerRepository.create({
       ...createCustomerDto,
       status: CustomerStatus.PENDING,
@@ -55,101 +53,86 @@ export class CustomersService {
     limit: number;
   }> {
     const { search, status, page = 1, limit = 10, withBalance } = queryDto;
-
     const skip = (page - 1) * limit;
 
-    // If client asks for customers with outstanding balances, handle separately.
     if (withBalance) {
-      console.log('==========================================');
-      console.log('withBalance:', withBalance, 'type:', typeof withBalance);
-      console.log('page:', page, 'skip:', skip, 'limit:', limit);
-
-      // 1) Build aggregator query to get customers with (sum(bill.amount) - sum(payment.amount)) > 0
-      let aggQb = this.customerRepository
+      // FIX: The previous implementation used two simultaneous LEFT JOINs
+      // (bills + payments) which produced a Cartesian product. A customer
+      // with N bills and M payments would generate N*M joined rows, causing
+      // SUM(bill.amount) to be multiplied by M and SUM(payment.amount) to
+      // be multiplied by N. This made the HAVING clause produce completely
+      // wrong balance values, silently excluding customers with real balances.
+      //
+      // Fix: use correlated subqueries — each runs independently against its
+      // own table with no cross-join, so SUM() always sees the correct rows.
+      let qb = this.customerRepository
         .createQueryBuilder('customer')
-        .leftJoin('customer.bills', 'bill')
-        .leftJoin('customer.payments', 'payment')
         .select('customer.id', 'id')
-        .addSelect('COALESCE(SUM(bill.amount), 0)', 'totalBills')
-        .addSelect('COALESCE(SUM(payment.amount), 0)', 'totalPayments')
-        .groupBy('customer.id')
-        .having(
-          'COALESCE(SUM(bill.amount), 0) - COALESCE(SUM(payment.amount), 0) > 0',
+        .addSelect('customer.first_name', 'firstName')
+        .addSelect('customer.last_name', 'lastName')
+        .addSelect('customer.email', 'email')
+        .addSelect('customer.phone', 'phone')
+        .addSelect('customer.address', 'address')
+        .addSelect('customer.status', 'status')
+        .addSelect('customer.created_at', 'createdAt')
+        .addSelect('customer.updated_at', 'updatedAt')
+        // Correlated subquery for total bills — no join, no Cartesian product
+        .addSelect(
+          '(SELECT COALESCE(SUM(b.amount), 0) FROM bills b WHERE b.customer_id = customer.id)',
+          'totalBills',
         )
-        .orderBy('customer.createdAt', 'DESC'); // Add ordering for consistency
+        // Correlated subquery for total payments — independent of bills
+        .addSelect(
+          '(SELECT COALESCE(SUM(p.amount), 0) FROM payments p WHERE p.customer_id = customer.id)',
+          'totalPayments',
+        )
+        .having(
+          '(SELECT COALESCE(SUM(b.amount), 0) FROM bills b WHERE b.customer_id = customer.id) - (SELECT COALESCE(SUM(p.amount), 0) FROM payments p WHERE p.customer_id = customer.id) > 0',
+        )
+        .groupBy('customer.id')
+        .orderBy('customer.created_at', 'DESC');
 
-      // Apply search if provided (name/email/phone)
       if (search) {
-        aggQb = aggQb.andWhere(
-          '(customer.firstName ILIKE :search OR customer.lastName ILIKE :search OR customer.email ILIKE :search OR customer.phone ILIKE :search)',
+        qb = qb.where(
+          '(customer.first_name ILIKE :search OR customer.last_name ILIKE :search OR customer.email ILIKE :search OR customer.phone ILIKE :search)',
           { search: `%${search}%` },
         );
       }
 
-      // Get total count (number of customers matching aggregator)
-      const totalAgg = await aggQb.getRawMany();
-      const total = totalAgg.length;
-      console.log('Total customers with balance:', total);
+      // Get total count — run without pagination
+      const allRows = await qb.getRawMany();
+      const total = allRows.length;
 
-      // CRITICAL FIX: Use limit() and offset() instead of skip() and take()
-      // for aggregated queries with GROUP BY and HAVING
-      console.log('Applying offset:', skip, 'limit:', limit);
-      const rawPaged = await aggQb.limit(limit).offset(skip).getRawMany();
+      // Get paged results
+      const pagedRows = await qb.limit(limit).offset(skip).getRawMany();
 
-      console.log('rawPaged length:', rawPaged.length);
-      console.log(
-        'rawPaged IDs:',
-        rawPaged.map((r) => r.id),
-      );
+      const customers: Customer[] = pagedRows.map((row) => {
+        const totalBills = parseFloat(row.totalBills || '0');
+        const totalPayments = parseFloat(row.totalPayments || '0');
+        const balance = totalBills - totalPayments;
 
-      const ids = rawPaged.map((r) => r.id);
-
-      // Fetch the full customer entities for these ids preserving ordering
-      let customers: Customer[] = [];
-      if (ids.length > 0) {
-        customers = await this.customerRepository.find({
-          where: { id: In(ids) },
+        const c = Object.assign(new Customer(), {
+          id: row.id,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          email: row.email,
+          phone: row.phone,
+          address: row.address,
+          status: row.status,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
         });
 
-        console.log('Fetched customers count:', customers.length);
+        (c as any).balance = balance;
+        return c;
+      });
 
-        // Re-order customers to match the exact order from rawPaged
-        const customerById = new Map(customers.map((c) => [c.id, c]));
-        customers = ids.map((id) => {
-          const c = customerById.get(id)!;
-          // attach balance computed from rawPaged
-          const row = rawPaged.find((r) => r.id === id);
-          const totalBills = parseFloat(row?.totalBills || '0');
-          const totalPayments = parseFloat(row?.totalPayments || '0');
-          const balance = totalBills - totalPayments;
-
-          console.log(
-            `Customer ${id}: bills=${totalBills}, payments=${totalPayments}, balance=${balance}`,
-          );
-
-          // Create a new object with the balance property
-          const customerWithBalance = Object.assign({}, c);
-          (customerWithBalance as any).balance = balance;
-          return customerWithBalance;
-        });
-      }
-
-      console.log('Final customers to return:', customers.length);
-      console.log('==========================================');
-
-      return {
-        customers,
-        total,
-        page,
-        limit,
-      };
+      return { customers, total, page, limit };
     }
 
-    // Default behavior (no withBalance filter)
-    console.log('Regular query - withBalance:', withBalance);
+    // Standard query — no balance filter
     const queryBuilder = this.customerRepository.createQueryBuilder('customer');
 
-    // Search by name, email, or phone
     if (search) {
       queryBuilder.where(
         '(customer.firstName ILIKE :search OR customer.lastName ILIKE :search OR customer.email ILIKE :search OR customer.phone ILIKE :search)',
@@ -157,32 +140,16 @@ export class CustomersService {
       );
     }
 
-    // Filter by status
     if (status) {
       queryBuilder.andWhere('customer.status = :status', { status });
     }
 
-    // Pagination
     queryBuilder.skip(skip).take(limit);
-
-    // Order by creation date
     queryBuilder.orderBy('customer.createdAt', 'DESC');
 
     const [customers, total] = await queryBuilder.getManyAndCount();
 
-    console.log(
-      'Regular query results - total:',
-      total,
-      'customers:',
-      customers.length,
-    );
-
-    return {
-      customers,
-      total,
-      page,
-      limit,
-    };
+    return { customers, total, page, limit };
   }
 
   async findOne(id: string): Promise<Customer> {
@@ -203,14 +170,12 @@ export class CustomersService {
   ): Promise<Customer & { balance: number }> {
     const customer = await this.findOne(id);
 
-    // Calculate total bills
     const totalBills = await this.billRepository
       .createQueryBuilder('bill')
       .select('SUM(bill.amount)', 'total')
       .where('bill.customerId = :customerId', { customerId: id })
       .getRawOne();
 
-    // Calculate total payments
     const totalPayments = await this.paymentRepository
       .createQueryBuilder('payment')
       .select('SUM(payment.amount)', 'total')
@@ -221,10 +186,7 @@ export class CustomersService {
     const payments = parseFloat(totalPayments?.total || '0');
     const balance = bills - payments;
 
-    return {
-      ...customer,
-      balance,
-    };
+    return { ...customer, balance };
   }
 
   async update(
@@ -239,7 +201,6 @@ export class CustomersService {
       throw new NotFoundException('Customer not found');
     }
 
-    // Check if email or phone is being changed and already exists
     if (updateCustomerDto.email || updateCustomerDto.phone) {
       const existingCustomer = await this.customerRepository.findOne({
         where: [
@@ -255,7 +216,6 @@ export class CustomersService {
       }
     }
 
-    // Update customer
     Object.assign(customer, updateCustomerDto);
     return this.customerRepository.save(customer);
   }
@@ -287,7 +247,6 @@ export class CustomersService {
       throw new NotFoundException('Customer not found');
     }
 
-    // Check if customer has bills or payments
     if (customer.bills.length > 0 || customer.payments.length > 0) {
       throw new BadRequestException(
         'Cannot delete customer with existing bills or payments. Delete those records first.',
@@ -295,7 +254,6 @@ export class CustomersService {
     }
 
     await this.customerRepository.remove(customer);
-
     return { message: 'Customer deleted successfully' };
   }
 
@@ -308,18 +266,15 @@ export class CustomersService {
       where: { status: CustomerStatus.PENDING },
     });
 
-    // Get customers with outstanding balances
+    // FIX: Also use correlated subqueries here for the same reason —
+    // the stats count must match what the list actually returns.
     const customersWithBalances = await this.customerRepository
       .createQueryBuilder('customer')
-      .leftJoin('customer.bills', 'bill')
-      .leftJoin('customer.payments', 'payment')
       .select('customer.id', 'id')
-      .addSelect('COALESCE(SUM(bill.amount), 0)', 'totalBills')
-      .addSelect('COALESCE(SUM(payment.amount), 0)', 'totalPayments')
-      .groupBy('customer.id')
       .having(
-        'COALESCE(SUM(bill.amount), 0) - COALESCE(SUM(payment.amount), 0) > 0',
+        '(SELECT COALESCE(SUM(b.amount), 0) FROM bills b WHERE b.customer_id = customer.id) - (SELECT COALESCE(SUM(p.amount), 0) FROM payments p WHERE p.customer_id = customer.id) > 0',
       )
+      .groupBy('customer.id')
       .getRawMany();
 
     return {

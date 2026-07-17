@@ -5,6 +5,7 @@ export const customersService = {
   getAll: async (params?: {
     search?: string;
     status?: string;
+    withBalance?: boolean;
     page?: number;
     limit?: number;
   }) => {

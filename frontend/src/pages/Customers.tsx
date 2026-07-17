@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customersService } from "../services/customers.service";
@@ -8,6 +9,9 @@ import { CreateCustomerModal } from "../components/customers/CreateCustomerModal
 import { EditCustomerModal } from "../components/customers/EditCustomerModal";
 import { CustomerTable } from "../components/customers/CustomerTable";
 import { CustomerFilters } from "../components/customers/CustomerFilters";
+import { ExportButton } from "../components/ui/ExportButton";
+import { useExport } from "../hooks/useExport";
+import type { ExportFormat } from "../hooks/useExport";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import {
@@ -16,6 +20,57 @@ import {
   CheckCircleIcon,
   ClockIcon,
 } from "@heroicons/react/24/outline";
+import {
+  formatDate,
+  formatPhoneNumber,
+  formatCurrency,
+  formatCustomerName,
+} from "../utils/formatters";
+
+// Column definitions — balance column only populated when withBalance filter active
+const CUSTOMER_EXPORT_COLUMNS = [
+  {
+    header: "First Name",
+    accessor: (c: Customer) => c.firstName,
+    width: 18,
+  },
+  {
+    header: "Last Name",
+    accessor: (c: Customer) => c.lastName,
+    width: 18,
+  },
+  {
+    header: "Email",
+    accessor: (c: Customer) => c.email,
+    width: 30,
+  },
+  {
+    header: "Phone",
+    accessor: (c: Customer) => formatPhoneNumber(c.phone),
+    width: 18,
+  },
+  {
+    header: "Address",
+    accessor: (c: Customer) => c.address ?? "—",
+    width: 28,
+  },
+  {
+    header: "Status",
+    accessor: (c: Customer) =>
+      c.status.charAt(0).toUpperCase() + c.status.slice(1),
+    width: 12,
+  },
+  {
+    header: "Outstanding Balance (MWK)",
+    accessor: (c: Customer) => (c.balance != null ? c.balance.toString() : "—"),
+    width: 26,
+  },
+  {
+    header: "Member Since",
+    accessor: (c: Customer) => formatDate(c.createdAt),
+    width: 16,
+  },
+];
 
 export const Customers = () => {
   const { isAdmin } = useAuth();
@@ -30,29 +85,23 @@ export const Customers = () => {
     limit: 10,
   });
 
-  // Clean filters helper - removes empty strings and transforms with_balance status
-  const cleanFilters = (filters: any) => {
+  // Converts frontend filter state into backend query params
+  const cleanFilters = (f: any) => {
     const cleaned: any = {};
-    Object.keys(filters).forEach((key) => {
-      if (
-        filters[key] !== "" &&
-        filters[key] !== null &&
-        filters[key] !== undefined
-      ) {
-        cleaned[key] = filters[key];
+    Object.keys(f).forEach((key) => {
+      if (f[key] !== "" && f[key] !== null && f[key] !== undefined) {
+        cleaned[key] = f[key];
       }
     });
-
-    // Map the front-end "with_balance" status into a dedicated flag the backend understands:
+    // Map "with_balance" status into the dedicated withBalance flag
     if (cleaned.status === "with_balance") {
       cleaned.withBalance = true;
       delete cleaned.status;
     }
-
     return cleaned;
   };
 
-  // Fetch customers
+  // Fetch customers (paginated)
   const { data, isLoading, error } = useQuery({
     queryKey: ["customers", filters],
     queryFn: () => customersService.getAll(cleanFilters(filters)),
@@ -71,6 +120,40 @@ export const Customers = () => {
       return failureCount < 2;
     },
   });
+
+  // Export hook
+  const { exportData, isExporting } = useExport<Customer>({
+    title: buildExportTitle(filters),
+    columns: CUSTOMER_EXPORT_COLUMNS,
+    filename: buildExportFilename(filters),
+  });
+
+  // Handle export — fetches ALL records matching current filters
+  const handleExport = async (format: ExportFormat) => {
+    try {
+      const exportFilters = {
+        ...cleanFilters(filters),
+        page: 1,
+        limit: 99999,
+      };
+      const result = await customersService.getAll(exportFilters);
+      const allCustomers: Customer[] = result?.customers ?? [];
+
+      if (allCustomers.length === 0) {
+        toast.error("No customers to export with the current filters.");
+        return;
+      }
+
+      await exportData(allCustomers, format);
+      toast.success(
+        `Exported ${allCustomers.length} customer${
+          allCustomers.length !== 1 ? "s" : ""
+        } as ${format.toUpperCase()}`
+      );
+    } catch {
+      toast.error("Export failed. Please try again.");
+    }
+  };
 
   // Approve customer mutation
   const approveMutation = useMutation({
@@ -204,12 +287,7 @@ export const Customers = () => {
         limit: filters.limit,
       });
     } else if (statName === "Total Customers") {
-      setFilters({
-        search: "",
-        status: "",
-        page: 1,
-        limit: filters.limit,
-      });
+      setFilters({ search: "", status: "", page: 1, limit: filters.limit });
     }
   };
 
@@ -292,14 +370,22 @@ export const Customers = () => {
           <h1 className="text-3xl font-bold text-gray-900">Customers</h1>
           <p className="text-gray-600 mt-1">Manage your customer accounts</p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center"
-        >
-          <PlusIcon className="w-5 h-5 mr-2" />
-          Add Customer
-        </Button>
+        <div className="flex items-center gap-3">
+          <ExportButton
+            onExport={handleExport}
+            isExporting={isExporting}
+            isDisabled={isLoading || !data?.total}
+            recordCount={data?.total}
+          />
+          <Button
+            variant="primary"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center"
+          >
+            <PlusIcon className="w-5 h-5 mr-2" />
+            Add Customer
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -379,3 +465,25 @@ export const Customers = () => {
     </div>
   );
 };
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function buildExportTitle(filters: { search: string; status: string }) {
+  if (filters.status === "with_balance")
+    return "Customers with Outstanding Balances";
+  if (filters.status === "approved") return "Approved Customers";
+  if (filters.status === "pending") return "Pending Customers";
+  if (filters.search) return `Customers — Search: "${filters.search}"`;
+  return "All Customers";
+}
+
+function buildExportFilename(filters: { search: string; status: string }) {
+  const date = new Date().toISOString().slice(0, 10);
+  const suffix =
+    filters.status === "with_balance"
+      ? "-outstanding-balances"
+      : filters.status
+      ? `-${filters.status}`
+      : "";
+  return `customers${suffix}-${date}`;
+}
